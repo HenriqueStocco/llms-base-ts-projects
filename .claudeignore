@@ -1,0 +1,35 @@
+# Caminhos que os agentes NÃO devem ler, modificar nem usar.
+# Sintaxe igual à do .gitignore. A última regra que casa decide.
+# Aplicado pelo hook .claude/hooks/guard-paths.sh; não é barreira de segurança sozinho.
+# As regras Read(...) de permissions.deny em .claude/settings.json espelham esta lista:
+# ao editar uma, editar a outra.
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+!.env.example
+.netrc
+.pgpass
+.pypirc
+
+# Chaves e certificados
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+
+# Estado de infraestrutura (costuma conter segredos)
+*.tfstate
+*.tfstate.*
+
+# Diretórios sensíveis
+.ssh/
+.aws/
+.gnupg/
+.kube/
+secrets/

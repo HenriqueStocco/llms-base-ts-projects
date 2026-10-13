@@ -111,15 +111,16 @@ expected_tooling_files() {
   echo ".gitignore"
 }
 
-# Source path (relative to the source root) of an installed file.
+# Source path (relative to the source root) of an installed file, for the
+# runtime given as $2 (bun or pnpm).
 source_of() {
   case "$1" in
     .githooks/*) echo "templates/githooks/${1#.githooks/}" ;;
     scripts/setup-hooks.sh) echo "templates/scripts/setup-hooks.sh" ;;
     biome.json) echo "templates/biome.json" ;;
     knip.json) echo "templates/knip.json" ;;
-    .github/dependabot.yml) echo "templates/github/dependabot.yml" ;;
-    .github/workflows/ci.yml) echo "templates/github/workflows/ci.yml" ;;
+    .github/dependabot.yml) echo "templates/github/dependabot-$2.yml" ;;
+    .github/workflows/ci.yml) echo "templates/github/workflows/ci-$2.yml" ;;
     .gitignore) echo "templates/gitignore" ;;
     *) echo "$1" ;;
   esac
@@ -134,7 +135,7 @@ test_dry_run() {
   local target
   target="$(new_dir dry-run)"
 
-  run "$INSTALLER" --dry-run --tooling "$target"
+  run "$INSTALLER" --dry-run --tooling --runtime bun "$target"
   expect_rc 0 "dry-run exits 0"
   expect_out '^WOULD-COPY +AGENTS\.md$' "dry-run prints WOULD-COPY"
   expect_no_out '^NEW ' "dry-run prints no NEW line"
@@ -151,8 +152,9 @@ test_real_install() {
   local target path source_path
   target="$(new_dir install)"
 
-  run "$INSTALLER" --tooling "$target"
+  run "$INSTALLER" --tooling --runtime bun "$target"
   expect_rc 0 "install exits 0"
+  expect_out '^Runtime: bun \(--runtime\)$' "install prints the runtime and its source"
 
   local missing=0
   while IFS= read -r path; do
@@ -162,7 +164,7 @@ test_real_install() {
       continue
     fi
 
-    source_path="$SOURCE_ROOT/$(source_of "$path")"
+    source_path="$SOURCE_ROOT/$(source_of "$path" bun)"
 
     if ! cmp -s "$source_path" "$target/$path"; then
       fail "installed $path" "content differs from source"
@@ -199,7 +201,7 @@ test_idempotent() {
   target="$(new_dir install)"
   before="$(snapshot "$target")"
 
-  run "$INSTALLER" --tooling "$target"
+  run "$INSTALLER" --tooling --runtime bun "$target"
   expect_rc 0 "second run exits 0"
   expect_out '^SAME +AGENTS\.md$' "second run reports SAME"
   expect_no_out '^(NEW|DIFFERENT|WOULD-COPY) ' "second run reports only SAME"
@@ -223,7 +225,7 @@ test_existing_file_kept() {
   printf '#!/bin/sh\necho custom\n' > "$target/.githooks/pre-commit"
   cp "$target/AGENTS.md" "$saved"
 
-  run "$INSTALLER" --tooling "$target"
+  run "$INSTALLER" --tooling --runtime bun "$target"
   expect_rc 0 "exits 0 even with DIFFERENT files"
   expect_out '^DIFFERENT +AGENTS\.md$' "reports DIFFERENT for AGENTS.md"
   expect_out 'diff -u' "prints a diff -u command"
@@ -251,7 +253,7 @@ test_refusals() {
   run "$INSTALLER" "$SOURCE_ROOT"
   expect_rc 2 "refuses target == source root"
 
-  run "$INSTALLER" --tooling "$SOURCE_ROOT/."
+  run "$INSTALLER" --tooling --runtime bun "$SOURCE_ROOT/."
   expect_rc 2 "refuses target == source root via a dot path"
 
   after="$(cd "$SOURCE_ROOT" && find . -path ./.git -prune -o -type f -print | sort | cksum)"
@@ -359,15 +361,57 @@ reset_push_repo() {
   find "$1" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 }
 
+# push_case <description> <expected-exit> <expected-manager|none> <packageManager|-> [lockfile...]
+# Builds a package.json with a verify script, runs pre-push and checks that only
+# the expected package manager was executed.
+push_case() {
+  local description="$1"
+  local expected_rc="$2"
+  local expected_manager="$3"
+  local field="$4"
+  shift 4
+
+  local repo="$TMP_ROOT/pre-push-repo"
+  local field_line=""
+  local lockfile other
+
+  if [[ "$field" != "-" ]]; then
+    field_line=$'  "packageManager": "'"$field"$'",\n'
+  fi
+
+  reset_push_repo "$repo"
+  printf '{\n  "name": "x",\n%s  "scripts": {\n    "test": "x",\n    "verify": "y"\n  }\n}\n' "$field_line" > "$repo/package.json"
+
+  for lockfile in "$@"; do
+    touch "$repo/$lockfile"
+  done
+
+  pre_push_run "$repo"
+  expect_rc "$expected_rc" "pre-push, $description: exits $expected_rc"
+
+  if [[ "$expected_manager" == "none" ]]; then
+    expect_no_out 'FAKE' "pre-push, $description: runs no package manager"
+    return 0
+  fi
+
+  expect_out "^FAKE $expected_manager run verify\$" "pre-push, $description: runs '$expected_manager run verify'"
+
+  for other in bun pnpm npm yarn; do
+    if [[ "$other" != "$expected_manager" ]]; then
+      expect_no_out "FAKE $other( |\$)" "pre-push, $description: does not run $other"
+    fi
+  done
+}
+
 test_pre_push() {
   echo "-- pre-push"
-  local repo manager lockfile
+  local repo manager
   repo="$(new_dir pre-push-repo)"
   init_repo "$repo"
 
   # Fake package managers: they only echo their arguments and never touch anything.
   mkdir -p "$TMP_ROOT/fake-bin"
-  for manager in bun npm pnpm yarn; do
+  for manager in bun pnpm npm yarn; do
     printf '#!/usr/bin/env bash\necho "FAKE %s $*"\n' "$manager" > "$TMP_ROOT/fake-bin/$manager"
     chmod +x "$TMP_ROOT/fake-bin/$manager"
   done
@@ -386,25 +430,262 @@ test_pre_push() {
   pre_push_run "$repo"
   expect_no_out 'FAKE' "a dependency named verify is not a verify script"
 
-  local entry
-  for entry in "bun:bun.lock" "bun:bun.lockb" "npm:package-lock.json" "pnpm:pnpm-lock.yaml" "yarn:yarn.lock"; do
-    manager="${entry%%:*}"
-    lockfile="${entry#*:}"
+  # Detection from the "packageManager" field, without any lockfile.
+  push_case "packageManager bun@, no lockfile" 0 bun "bun@1.2.3"
+  push_case "packageManager pnpm@, no lockfile" 0 pnpm "pnpm@10.22.0"
 
-    reset_push_repo "$repo"
-    printf '{\n  "scripts": {\n    "test": "x",\n    "verify": "y"\n  }\n}\n' > "$repo/package.json"
-    touch "$repo/$lockfile"
+  # Detection from the lockfile.
+  push_case "bun.lock" 0 bun - bun.lock
+  push_case "bun.lockb" 0 bun - bun.lockb
+  push_case "pnpm-lock.yaml" 0 pnpm - pnpm-lock.yaml
 
-    pre_push_run "$repo"
-    expect_rc 0 "$lockfile: exits 0"
-    expect_out "^FAKE $manager run verify\$" "$lockfile: runs '$manager run verify'"
+  # The packageManager field wins over a conflicting lockfile.
+  push_case "packageManager pnpm@ over bun.lock" 0 pnpm "pnpm@10.22.0" bun.lock
+  push_case "packageManager bun@ over pnpm-lock.yaml" 0 bun "bun@1.2.3" pnpm-lock.yaml
+
+  # Unsupported markers.
+  push_case "packageManager npm@" 1 none "npm@10.9.0"
+  expect_out 'unsupported package manager \(this kit supports Bun and pnpm\)' "pre-push, packageManager npm@: prints the unsupported message"
+  push_case "packageManager yarn@" 1 none "yarn@4.5.0"
+  push_case "packageManager npm@ over bun.lock" 1 none "npm@10.9.0" bun.lock
+  push_case "package-lock.json" 1 none - package-lock.json
+  expect_out 'unsupported package manager \(this kit supports Bun and pnpm\)' "pre-push, package-lock.json: prints the unsupported message"
+  push_case "npm-shrinkwrap.json" 1 none - npm-shrinkwrap.json
+  push_case "yarn.lock" 1 none - yarn.lock
+  expect_out 'unsupported package manager \(this kit supports Bun and pnpm\)' "pre-push, yarn.lock: prints the unsupported message"
+
+  # Verify script but nothing to detect.
+  push_case "no packageManager and no lockfile" 1 none -
+  expect_out 'no package manager was detected' "pre-push, nothing detectable: prints the detection error"
+
+  # Minified package.json.
+  reset_push_repo "$repo"
+  printf '{"packageManager":"pnpm@10.22.0","scripts":{"verify":"y"}}\n' > "$repo/package.json"
+  pre_push_run "$repo"
+  expect_rc 0 "pre-push, minified package.json: exits 0"
+  expect_out '^FAKE pnpm run verify$' "pre-push, minified package.json: runs 'pnpm run verify'"
+}
+
+# runtime_target <name> <package.json content|-> [file...]
+# Creates a fresh target directory with the given package.json and empty files.
+runtime_target() {
+  local dir="$TMP_ROOT/runtime-$1"
+  local content="$2"
+  local file
+  shift 2
+
+  rm -rf "$dir"
+  mkdir -p "$dir"
+
+  if [[ "$content" != "-" ]]; then
+    printf '%s\n' "$content" > "$dir/package.json"
+  fi
+
+  for file in "$@"; do
+    touch "$dir/$file"
   done
 
-  reset_push_repo "$repo"
-  printf '{\n  "scripts": {\n    "verify": "y"\n  }\n}\n' > "$repo/package.json"
-  pre_push_run "$repo"
-  expect_rc 1 "verify script without a lockfile exits 1"
-  expect_no_out 'FAKE' "verify script without a lockfile runs nothing"
+  echo "$dir"
+}
+
+# expect_runtime_files <target> <runtime> <description>
+expect_runtime_files() {
+  local target="$1"
+  local runtime="$2"
+  local description="$3"
+
+  if cmp -s "$SOURCE_ROOT/templates/github/workflows/ci-$runtime.yml" "$target/.github/workflows/ci.yml" &&
+    cmp -s "$SOURCE_ROOT/templates/github/dependabot-$runtime.yml" "$target/.github/dependabot.yml"; then
+    pass "$description: installs the $runtime CI and Dependabot templates"
+  else
+    fail "$description: installs the $runtime CI and Dependabot templates"
+  fi
+}
+
+# expect_target_unchanged <target> <description>
+expect_target_unchanged() {
+  if [[ -z "$(ls -A "$1")" ]]; then
+    pass "$2: wrote nothing"
+  else
+    fail "$2: wrote nothing" "target is not empty"
+  fi
+}
+
+test_runtime_detection() {
+  echo "-- install: runtime selection"
+  local target
+
+  target="$(runtime_target pm-bun '{"packageManager": "bun@1.2.3"}')"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 0 "packageManager bun@: exits 0"
+  expect_out '^Runtime: bun \(packageManager\)$' "packageManager bun@: detected as bun"
+  expect_runtime_files "$target" bun "packageManager bun@"
+
+  target="$(runtime_target pm-pnpm '{"name":"x","packageManager":"pnpm@10.22.0"}')"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 0 "packageManager pnpm@ (minified): exits 0"
+  expect_out '^Runtime: pnpm \(packageManager\)$' "packageManager pnpm@: detected as pnpm"
+  expect_runtime_files "$target" pnpm "packageManager pnpm@"
+
+  target="$(runtime_target lock-bun '-' bun.lock)"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 0 "bun.lock: exits 0"
+  expect_out '^Runtime: bun \(lockfile\)$' "bun.lock: detected as bun"
+  expect_runtime_files "$target" bun "bun.lock"
+
+  target="$(runtime_target lock-bunb '{"name":"x"}' bun.lockb)"
+  run "$INSTALLER" --tooling "$target"
+  expect_out '^Runtime: bun \(lockfile\)$' "bun.lockb: detected as bun"
+  expect_runtime_files "$target" bun "bun.lockb"
+
+  target="$(runtime_target lock-pnpm '{"name":"x"}' pnpm-lock.yaml)"
+  run "$INSTALLER" --tooling "$target"
+  expect_out '^Runtime: pnpm \(lockfile\)$' "pnpm-lock.yaml: detected as pnpm"
+  expect_runtime_files "$target" pnpm "pnpm-lock.yaml"
+
+  target="$(runtime_target override '{"packageManager": "bun@1.2.3"}' bun.lock)"
+  run "$INSTALLER" --tooling --runtime pnpm "$target"
+  expect_rc 0 "--runtime override: exits 0"
+  expect_out '^Runtime: pnpm \(--runtime\)$' "--runtime overrides the detection"
+  expect_runtime_files "$target" pnpm "--runtime override"
+
+  target="$(runtime_target equals '-')"
+  run "$INSTALLER" --tooling --runtime=bun "$target"
+  expect_out '^Runtime: bun \(--runtime\)$' "--runtime=bun form is accepted"
+
+  target="$(runtime_target dry '{"packageManager": "pnpm@10.22.0"}')"
+  run "$INSTALLER" --dry-run --tooling "$target"
+  expect_rc 0 "dry-run with detection: exits 0"
+  expect_out '^Runtime: pnpm \(packageManager\)$' "dry-run prints the detected runtime"
+  expect_out '^WOULD-COPY +\.github/workflows/ci\.yml$' "dry-run lists the CI workflow"
+
+  # Undetectable or unsupported: exit 2 and write nothing.
+  target="$(runtime_target none '-')"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "undetectable runtime exits 2"
+  expect_out '--runtime bun\|pnpm' "undetectable runtime asks for --runtime bun|pnpm"
+  expect_out 'npm and Yarn are not supported' "undetectable runtime says npm and Yarn are unsupported"
+  expect_target_unchanged "$target" "undetectable runtime"
+
+  target="$(runtime_target npm-pm '{"packageManager": "npm@10.9.0"}')"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "packageManager npm@ only: exits 2"
+  expect_out 'npm and Yarn are not supported' "packageManager npm@ only: explains the limitation"
+
+  # Same strictness as the pre-push hook: an unsupported packageManager wins
+  # over a lockfile that would otherwise select Bun.
+  target="$(runtime_target npm-pm-bun-lock '{"packageManager": "npm@10.9.0"}' bun.lock)"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "packageManager npm@ over bun.lock: exits 2"
+  expect_no_out '^(NEW|WOULD-COPY) ' "packageManager npm@ over bun.lock: copies nothing"
+
+  target="$(runtime_target npm-lock '-' package-lock.json)"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "package-lock.json only: exits 2"
+
+  target="$(runtime_target yarn-lock '-' yarn.lock)"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "yarn.lock only: exits 2"
+
+  target="$(runtime_target yarn-pm '{"packageManager": "yarn@4.5.0"}' yarn.lock)"
+  run "$INSTALLER" --tooling "$target"
+  expect_rc 2 "packageManager yarn@ with yarn.lock: exits 2"
+  expect_no_out '^(NEW|WOULD-COPY) ' "packageManager yarn@ with yarn.lock: copies nothing"
+
+  target="$(runtime_target invalid '-')"
+  run "$INSTALLER" --tooling --runtime npm "$target"
+  expect_rc 2 "--runtime npm exits 2"
+
+  run "$INSTALLER" --tooling --runtime yarn "$target"
+  expect_rc 2 "--runtime yarn exits 2"
+
+  run "$INSTALLER" --tooling --runtime "" "$target"
+  expect_rc 2 "--runtime with an empty value exits 2"
+
+  run "$INSTALLER" --tooling --runtime
+  expect_rc 2 "--runtime without a value exits 2"
+  expect_target_unchanged "$target" "invalid --runtime"
+
+  # --runtime without --tooling is accepted and ignored with a warning.
+  target="$(runtime_target no-tooling '-')"
+  run "$INSTALLER" --runtime bun "$target"
+  expect_rc 0 "--runtime without --tooling: exits 0"
+  expect_out 'warning: --runtime is ignored without --tooling' "--runtime without --tooling: warns"
+  expect_no_out '^Runtime:' "--runtime without --tooling: prints no Runtime line"
+
+  if [[ -e "$target/.github" || -e "$target/.githooks" ]]; then
+    fail "--runtime without --tooling: installs no tooling files"
+  else
+    pass "--runtime without --tooling: installs no tooling files"
+  fi
+
+  # Core kit only: no runtime needed.
+  target="$(runtime_target core-only '-')"
+  run "$INSTALLER" "$target"
+  expect_rc 0 "core kit without --tooling needs no runtime"
+}
+
+# file_has <file> <fixed-string> <description>
+file_has() {
+  if grep -qF -- "$2" "$1"; then
+    pass "$(basename "$1") contains $3"
+  else
+    fail "$(basename "$1") contains $3" "missing: $2"
+  fi
+}
+
+# file_lacks <file> <fixed-string> <description>
+file_lacks() {
+  if grep -qF -- "$2" "$1"; then
+    fail "$(basename "$1") does not contain $3" "found: $2"
+  else
+    pass "$(basename "$1") does not contain $3"
+  fi
+}
+
+test_templates() {
+  echo "-- templates"
+  local github="$SOURCE_ROOT/templates/github"
+  local workflow
+
+  for workflow in "$github/workflows/ci-bun.yml" "$github/workflows/ci-pnpm.yml"; do
+    file_has "$workflow" "biome ci" "biome ci"
+    file_has "$workflow" "knip" "knip"
+    file_has "$workflow" "tsc --noEmit" "tsc --noEmit"
+    file_has "$workflow" "concurrency:" "concurrency"
+    file_has "$workflow" "--frozen-lockfile" "--frozen-lockfile"
+    file_has "$workflow" "permissions:" "permissions"
+    file_has "$workflow" "actions/checkout@v7" "actions/checkout@v7"
+    file_has "$workflow" "name: ci" "workflow name ci"
+    file_has "$workflow" "quality:" "quality job"
+    file_has "$workflow" "audit:" "audit job"
+
+    # "pnpm" contains "npm", so match npm, npx and yarn only as whole words.
+    if grep -Eq '(^|[^[:alnum:]_-])(npm|npx|yarn)([^[:alnum:]_-]|$)|package-lock' "$workflow"; then
+      fail "$(basename "$workflow") has no npm, npx, yarn or package-lock"
+    else
+      pass "$(basename "$workflow") has no npm, npx, yarn or package-lock"
+    fi
+  done
+
+  file_has "$github/workflows/ci-bun.yml" "actions/cache@v6" "actions/cache@v6"
+  file_has "$github/workflows/ci-bun.yml" "~/.bun/install/cache" "the Bun cache path"
+  file_has "$github/workflows/ci-pnpm.yml" "cache: pnpm" "cache: pnpm"
+  file_has "$github/workflows/ci-pnpm.yml" "pnpm/action-setup@v6" "pnpm/action-setup@v6"
+
+  file_has "$github/dependabot-bun.yml" 'package-ecosystem: "bun"' "the bun ecosystem"
+  file_lacks "$github/dependabot-bun.yml" 'package-ecosystem: "npm"' "the npm ecosystem"
+  file_has "$github/dependabot-pnpm.yml" 'package-ecosystem: "npm"' "the npm ecosystem"
+  file_lacks "$github/dependabot-pnpm.yml" 'package-ecosystem: "bun"' "the bun ecosystem"
+
+  local old
+  for old in "$github/dependabot.yml" "$github/workflows/ci.yml"; do
+    if [[ -e "$old" ]]; then
+      fail "old template ${old#"$SOURCE_ROOT"/} no longer exists"
+    else
+      pass "old template ${old#"$SOURCE_ROOT"/} no longer exists"
+    fi
+  done
 }
 
 test_setup_hooks() {
@@ -454,6 +735,8 @@ main() {
   test_pre_commit
   test_pre_push
   test_setup_hooks
+  test_runtime_detection
+  test_templates
 
   echo
   echo "Summary: $PASSED passed, $FAILED failed."

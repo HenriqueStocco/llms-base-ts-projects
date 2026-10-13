@@ -2,6 +2,9 @@
 # pre-push hook: runs the project's `verify` script before pushing.
 # The project defines `verify` in package.json (e.g. typecheck + lint + tests);
 # this hook does not invent any other script.
+#
+# Supports Bun and pnpm only. The package manager comes from the "packageManager"
+# field in package.json (bun@ or pnpm@), then from the lockfile.
 set -euo pipefail
 
 # Succeeds when package.json has a "verify" entry inside its "scripts" block.
@@ -18,16 +21,43 @@ has_verify_script() {
   grep -q '"verify"[[:space:]]*:' <<< "$scripts_block"
 }
 
-# Prints the package manager inferred from the lockfile (nothing if unknown).
+# Prints the value of the "packageManager" field (nothing if absent).
+# Text-based on purpose (no jq); handles pretty-printed and minified JSON.
+read_package_manager_field() {
+  local output
+  output="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json)"
+
+  printf '%s\n' "${output%%$'\n'*}"
+}
+
+# Prints "bun", "pnpm" or "unsupported" (nothing if no package manager is found).
+# Order: the "packageManager" field first, then the lockfile.
 detect_package_manager() {
+  local field
+  field="$(read_package_manager_field)"
+
+  case "$field" in
+    bun@*)
+      echo "bun"
+      return 0
+      ;;
+    pnpm@*)
+      echo "pnpm"
+      return 0
+      ;;
+    "") ;;
+    *)
+      echo "unsupported"
+      return 0
+      ;;
+  esac
+
   if [[ -f bun.lock || -f bun.lockb ]]; then
     echo "bun"
-  elif [[ -f package-lock.json ]]; then
-    echo "npm"
   elif [[ -f pnpm-lock.yaml ]]; then
     echo "pnpm"
-  elif [[ -f yarn.lock ]]; then
-    echo "yarn"
+  elif [[ -f package-lock.json || -f npm-shrinkwrap.json || -f yarn.lock ]]; then
+    echo "unsupported"
   fi
 }
 
@@ -48,15 +78,21 @@ main() {
   local manager
   manager="$(detect_package_manager)"
 
+  if [[ "$manager" == "unsupported" ]]; then
+    echo "pre-push: unsupported package manager (this kit supports Bun and pnpm)." >&2
+    echo "Found npm or Yarn in the \"packageManager\" field or as the lockfile." >&2
+    exit 1
+  fi
+
   if [[ -z "$manager" ]]; then
-    echo "pre-push: package.json has a \"verify\" script but no known lockfile" >&2
-    echo "(bun.lock, bun.lockb, package-lock.json, pnpm-lock.yaml, yarn.lock)." >&2
-    echo "Cannot choose a package manager; refusing to push without verification." >&2
+    echo "pre-push: package.json has a \"verify\" script but no package manager was detected" >&2
+    echo "(\"packageManager\" bun@ or pnpm@ in package.json, or bun.lock, bun.lockb," >&2
+    echo "pnpm-lock.yaml). Refusing to push without verification." >&2
     exit 1
   fi
 
   if ! command -v "$manager" > /dev/null 2>&1; then
-    echo "pre-push: '$manager' (from the lockfile) was not found in PATH." >&2
+    echo "pre-push: '$manager' (from package.json or the lockfile) was not found in PATH." >&2
     exit 1
   fi
 

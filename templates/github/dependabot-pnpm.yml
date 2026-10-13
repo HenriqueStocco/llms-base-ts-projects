@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Dependabot uses its "npm" ecosystem for pnpm projects. Its docs list pnpm
+  # v7 to v10, so check support before moving to a newer pnpm.
+  - package-ecosystem: "npm"
+    # For monorepos, use `directories:` with globs instead of `directory:`.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "github-actions"
+    # For monorepos, use `directories:` with globs instead of `directory:`.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7

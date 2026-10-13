@@ -1,0 +1,65 @@
+# Private repos on a Free plan get 2,000 Actions minutes per month; the
+# concurrency block cancels superseded runs to save them. Local Git hooks remain
+# the main guard, because --no-verify bypasses them; this workflow repeats the
+# checks.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # pnpm must be installed before setup-node, because `cache: pnpm` needs
+      # it. The pnpm version is read from `packageManager` in package.json; if
+      # it is absent, add `with: version: <major>`.
+      - uses: pnpm/action-setup@v6
+
+      # The cache key comes from pnpm-lock.yaml. `node-version-file` needs
+      # `engines.node` in package.json; otherwise use `.nvmrc` or
+      # `.node-version`, or set `node-version: lts/*`.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Biome, Knip and TypeScript must be devDependencies of the project, so
+      # CI never downloads an unpinned tool.
+      - name: Biome (lint, format, imports)
+        run: pnpm exec biome ci .
+
+      - name: Knip (unused files, exports, dependencies)
+        run: pnpm exec knip
+
+      # Adapt for project references or monorepos, e.g. `tsc -b` or one step
+      # per package.
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+
+      # Reads the lockfile; no install needed.
+      - run: pnpm audit --audit-level high

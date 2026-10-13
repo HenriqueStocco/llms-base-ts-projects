@@ -290,16 +290,20 @@ When the project has the corresponding control, use it as evidence. When configu
 | Circular dependencies and boundaries between packages (7) | Dependency graph analysis or lint rules. |
 | Commit message (17.3) | `commit-msg` hook. |
 | Secrets in commits (5.2) | Secret scanner, in `pre-commit` and in CI. GitHub secret scanning is not available on user-owned private repositories (Free/Pro) and is paid on organization private repositories: do not rely on it. |
-| Vulnerable dependencies (14) | `bun audit --audit-level=high` or `npm audit --audit-level=high` in CI; Dependabot alerts on GitHub (15.12). |
+| Vulnerable dependencies (14) | `bun audit --audit-level=high` or `pnpm audit --audit-level high` in CI; Dependabot alerts on GitHub (15.12). |
 | Behavior (12) | Tests in `pre-push` (targeted) and in CI (full). |
 
 The rest depends on diff review.
 
 ### 15.12 Dependency updates and supply chain
 
-- **One update bot per repository.** Default on GitHub: Dependabot (`.github/dependabot.yml`, `version: 2`, ecosystems `bun` or `npm`, plus `github-actions`), with a `cooldown`. Renovate is the alternative when grouping, automerge, or action pinning is needed; never run both for version updates. Bun support requires the text `bun.lock` (not `bun.lockb`). Dependabot alerts are free on private repositories; keep them on.
-- **Single lockfile**, committed. CI installs with the lockfile frozen: `bun ci` / `bun install --frozen-lockfile`, or `npm ci`. Bun does not enable frozen mode automatically in CI.
-- **Install scripts policy:** Bun does not run dependency lifecycle scripts by default except a curated list; use `trustedDependencies` to control it. npm 10/11 (bundled with Node.js 22/24/26) runs them by default, so set `ignore-scripts=true`; npm 12 blocks them unless the root `allowScripts` policy allows. Prefer an age gate on new releases (`minimumReleaseAge` in Bun, `cooldown` in Dependabot).
-- **Pin the toolchain:** `packageManager` (for example `"bun@<version>"`) and, for Node.js, `.nvmrc` or `.node-version` or `engines`. Corepack is not bundled with Node.js 25 and later. Use a supported Node.js line (Node.js 20 reached end of life on 2026-04-30; 24 is LTS).
+- **Package managers:** this base supports Bun and pnpm. npm and Yarn are not used; a project that uses them adapts the rules below.
+- **One update bot per repository.** Default on GitHub: Dependabot (`.github/dependabot.yml`, `version: 2`, plus `github-actions`), with a `cooldown`. Ecosystem `bun` needs the text `bun.lock` (not `bun.lockb`); pnpm uses the `npm` ecosystem, and the documentation lists pnpm v7 to v10, so check support before moving to a newer pnpm. Renovate is the alternative when grouping, automerge, or action pinning is needed; never run both for version updates. Dependabot alerts are free on private repositories; keep them on.
+- **Single lockfile**, committed. CI installs with it frozen: `bun install --frozen-lockfile` (or `bun ci`), `pnpm install --frozen-lockfile`. Bun does not enable frozen mode automatically in CI.
+- **Install scripts and release age:** Bun does not run dependency lifecycle scripts by default except a curated list; `trustedDependencies` controls it, and `minimumReleaseAge` gates new releases. pnpm exposes `ignoreScripts`, `strictDepBuilds`, `allowBuilds`, and `minimumReleaseAge` in its current documentation; setting names differ between majors, so read the settings page of the installed version. Dependabot's `cooldown` plays the same role for its PRs.
+- **Audit:** `bun audit --audit-level=high` or `pnpm audit --audit-level high`, as its own CI job.
+- **CI cache:** Bun: `oven-sh/setup-bun` caches only the Bun executable, so cache `~/.bun/install/cache` with `actions/cache`, keyed on `bun.lock`. pnpm: install pnpm first (`pnpm/action-setup`, which reads `packageManager`), then `actions/setup-node` with `cache: pnpm`. Cancel superseded runs with `concurrency` to save minutes on private repositories.
+- **Quality job (CI):** Biome (`biome ci .`), Knip, and `tsc --noEmit`, invoked from the project's `node_modules/.bin` (or `pnpm exec`) so CI never downloads an unpinned tool; they must be devDependencies.
+- **Pin the toolchain:** `packageManager` (for example `"bun@<version>"` or `"pnpm@<version>"`) and, for Node.js, `engines.node` or `.nvmrc`/`.node-version`. Corepack is not bundled with Node.js 25 and later. Use a supported Node.js line (Node.js 20 reached end of life on 2026-04-30; 24 is LTS).
 - Update this section when a tool's major version changes: versions and flags were verified on 2026-10-13.
 

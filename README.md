@@ -21,6 +21,8 @@ Guidance base for AI coding agents (Claude Code first). It is **not a software p
 scripts/install-project.sh --dry-run --tooling /path/to/project
 
 # 2. Install. Add --tooling for the templates, omit it for the core kit only.
+#    The runtime (bun or pnpm) is detected from package.json "packageManager",
+#    then from the lockfile; pass --runtime bun|pnpm when it cannot be detected.
 scripts/install-project.sh --tooling /path/to/project
 
 # 3. In the target project, if the Git hooks were installed:
@@ -42,4 +44,7 @@ The agent does not edit `.claude/**`, `.claudeignore`, or the user's settings, a
 - Rules guide; hooks and permissions enforce. The model can still err or ignore a behavioral rule.
 - `git commit --no-verify` and `git push --no-verify` bypass local hooks, so CI must repeat the same checks (`templates/github/workflows/ci.yml`).
 - GitHub secret scanning and branch protection are not available on private repositories on the Free plan. Local hooks are the main guard there, and CI is the reproducible backup.
-- The templates are starting points: adapt `knip.json` (`entry` and `project`; with workspaces the root ones are ignored), the Dependabot ecosystem, and the CI steps to the project's real scripts.
+- The templates support Bun and pnpm only. npm and Yarn are not covered; a target whose `packageManager` is npm or Yarn is refused.
+- CI installs with a frozen lockfile, so the lockfile (`bun.lock` or `pnpm-lock.yaml`) must be committed. A project without one fails the `quality` job until it is generated and committed.
+- The CI workflow has a `quality` job (Biome, Knip, `tsc --noEmit`) and an `audit` job, with dependency caching. Biome, Knip, and TypeScript must be devDependencies of the project.
+- The templates are starting points: adapt `knip.json` (`entry` and `project`; with workspaces the root ones are ignored) and the `tsc` step (project references, monorepos) to the project.

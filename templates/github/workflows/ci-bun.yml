@@ -1,0 +1,62 @@
+# Private repos on a Free plan get 2,000 Actions minutes per month; the
+# concurrency block cancels superseded runs to save them. Local Git hooks remain
+# the main guard, because --no-verify bypasses them; this workflow repeats the
+# checks.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Bun version comes from `packageManager` in package.json, then from
+      # `engines.bun`. This action only caches the Bun executable, not the
+      # dependencies, so the install cache is handled by the next step.
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock', '**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile
+
+      # Biome, Knip and TypeScript must be devDependencies of the project. The
+      # binaries are invoked from node_modules/.bin on purpose, so CI never
+      # downloads an unpinned tool.
+      - name: Biome (lint, format, imports)
+        run: ./node_modules/.bin/biome ci .
+
+      - name: Knip (unused files, exports, dependencies)
+        run: ./node_modules/.bin/knip
+
+      # Adapt for project references or monorepos, e.g. `tsc -b` or one step
+      # per package.
+      - name: TypeScript
+        run: ./node_modules/.bin/tsc --noEmit
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+
+      # Reads the lockfile; no install needed.
+      - run: bun audit --audit-level=high

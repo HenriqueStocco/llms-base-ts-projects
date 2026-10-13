@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # Use "npm" for npm, pnpm and yarn projects.
   # "bun" requires Bun >= 1.1.39 and the text lockfile bun.lock.
   - package-ecosystem: "bun"
     # For monorepos, use `directories:` with globs instead of `directory:`.
@@ -11,6 +10,9 @@ updates:
       default-days: 7
 
   - package-ecosystem: "github-actions"
+    # For monorepos, use `directories:` with globs instead of `directory:`.
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7

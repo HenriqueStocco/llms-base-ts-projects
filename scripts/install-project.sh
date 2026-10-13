@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Copies the agent kit from this repository into another project.
 #
-# Usage: scripts/install-project.sh [--dry-run] [--tooling] <target-dir>
+# Usage: scripts/install-project.sh [--dry-run] [--tooling] [--runtime bun|pnpm] <target-dir>
+#
+# With --tooling, the CI workflow and the Dependabot config depend on the
+# project's runtime (Bun or pnpm; npm and Yarn are not supported by these
+# templates). It comes from --runtime, or is detected in the target from the
+# "packageManager" field of package.json and then from the lockfile.
 #
 # Never overwrites or deletes anything in the target: files that already exist
 # and differ are kept and reported as DIFFERENT. There is no --force.
@@ -12,6 +17,8 @@ SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
 DRY_RUN=0
 TOOLING=0
+RUNTIME=""
+RUNTIME_SOURCE=""
 TARGET=""
 
 COUNT_NEW=0
@@ -26,11 +33,15 @@ DESTINATIONS=()
 
 usage() {
   cat >&2 << 'EOF'
-Usage: scripts/install-project.sh [--dry-run] [--tooling] <target-dir>
+Usage: scripts/install-project.sh [--dry-run] [--tooling] [--runtime bun|pnpm] <target-dir>
 
-  --dry-run   print what would happen; write nothing
-  --tooling   also install the Git hooks, Biome/Knip configs, Dependabot,
-              CI workflow and .gitignore templates
+  --dry-run          print what would happen; write nothing
+  --tooling          also install the Git hooks, Biome/Knip configs, Dependabot,
+                     CI workflow and .gitignore templates
+  --runtime bun|pnpm runtime of the target project, used to pick the CI and
+                     Dependabot templates. Without it, --tooling detects it from
+                     "packageManager" in the target's package.json, then from
+                     its lockfile. npm and Yarn are not supported.
 
 Existing files in the target are never overwritten or deleted.
 EOF
@@ -74,10 +85,22 @@ build_mappings() {
     add_mapping "templates/scripts/setup-hooks.sh" "scripts/setup-hooks.sh"
     add_mapping "templates/biome.json" "biome.json"
     add_mapping "templates/knip.json" "knip.json"
-    add_mapping "templates/github/dependabot.yml" ".github/dependabot.yml"
-    add_mapping "templates/github/workflows/ci.yml" ".github/workflows/ci.yml"
+    add_mapping "templates/github/dependabot-$RUNTIME.yml" ".github/dependabot.yml"
+    add_mapping "templates/github/workflows/ci-$RUNTIME.yml" ".github/workflows/ci.yml"
     add_mapping "templates/gitignore" ".gitignore"
   fi
+}
+
+set_runtime_option() {
+  case "$1" in
+    bun | pnpm)
+      RUNTIME="$1"
+      RUNTIME_SOURCE="--runtime"
+      ;;
+    *)
+      die_usage "invalid --runtime value: $1 (expected bun or pnpm)"
+      ;;
+  esac
 }
 
 parse_args() {
@@ -88,6 +111,16 @@ parse_args() {
         ;;
       --tooling)
         TOOLING=1
+        ;;
+      --runtime)
+        if [[ $# -lt 2 ]]; then
+          die_usage "--runtime needs a value (bun or pnpm)"
+        fi
+        set_runtime_option "$2"
+        shift
+        ;;
+      --runtime=*)
+        set_runtime_option "${1#--runtime=}"
         ;;
       -h | --help)
         usage
@@ -134,6 +167,78 @@ resolve_target() {
     echo "install-project: refusing to install into the source repository itself." >&2
     exit 2
   fi
+}
+
+# Prints the value of "packageManager" in the target's package.json (nothing if
+# absent). Text-based on purpose: the installer must not require jq.
+read_target_package_manager_field() {
+  local package_json="$TARGET/package.json"
+  local output
+
+  if [[ ! -f "$package_json" ]]; then
+    return 0
+  fi
+
+  output="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$package_json")"
+  printf '%s\n' "${output%%$'\n'*}"
+}
+
+# Sets RUNTIME and RUNTIME_SOURCE from the target project, or exits 2.
+detect_runtime() {
+  local field
+  local unsupported=""
+  field="$(read_target_package_manager_field)"
+
+  case "$field" in
+    bun@*)
+      RUNTIME="bun"
+      RUNTIME_SOURCE="packageManager"
+      return 0
+      ;;
+    pnpm@*)
+      RUNTIME="pnpm"
+      RUNTIME_SOURCE="packageManager"
+      return 0
+      ;;
+    "") ;;
+    *)
+      {
+        echo "install-project: unsupported \"packageManager\" in package.json: $field"
+        echo "  npm and Yarn are not supported by these templates (Bun and pnpm only). Pass --runtime bun|pnpm to override."
+      } >&2
+      exit 2
+      ;;
+  esac
+
+  if [[ -f "$TARGET/bun.lock" || -f "$TARGET/bun.lockb" ]]; then
+    RUNTIME="bun"
+    RUNTIME_SOURCE="lockfile"
+    return 0
+  fi
+
+  if [[ -f "$TARGET/pnpm-lock.yaml" ]]; then
+    RUNTIME="pnpm"
+    RUNTIME_SOURCE="lockfile"
+    return 0
+  fi
+
+  local lockfile
+  for lockfile in package-lock.json npm-shrinkwrap.json yarn.lock; do
+    if [[ -f "$TARGET/$lockfile" ]]; then
+      unsupported="${unsupported:+$unsupported, }$lockfile"
+    fi
+  done
+
+  {
+    echo "install-project: cannot detect the runtime of the target project."
+    if [[ -n "$unsupported" ]]; then
+      echo "  found only npm/Yarn markers: $unsupported"
+    else
+      echo "  no \"packageManager\" field in package.json and no bun.lock, bun.lockb or pnpm-lock.yaml."
+    fi
+    echo "  Pass --runtime bun|pnpm. npm and Yarn are not supported by these templates."
+  } >&2
+  exit 2
 }
 
 check_sources() {
@@ -214,6 +319,15 @@ print_summary() {
 main() {
   parse_args "$@"
   resolve_target
+
+  if [[ "$TOOLING" -eq 1 ]]; then
+    if [[ -z "$RUNTIME" ]]; then
+      detect_runtime
+    fi
+  elif [[ -n "$RUNTIME" ]]; then
+    echo "install-project: warning: --runtime is ignored without --tooling." >&2
+  fi
+
   build_mappings
   check_sources
 
@@ -221,6 +335,10 @@ main() {
     echo "Dry run: nothing will be written. Target: $TARGET"
   else
     echo "Installing into: $TARGET"
+  fi
+
+  if [[ "$TOOLING" -eq 1 ]]; then
+    echo "Runtime: $RUNTIME ($RUNTIME_SOURCE)"
   fi
 
   local index

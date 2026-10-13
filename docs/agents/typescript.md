@@ -1,19 +1,19 @@
 # TypeScript
 
-Detalhe das seções 6 de `AGENTS.md`, com exemplos e procedimentos. Não contradiz o núcleo; em caso de divergência, vale o núcleo. A numeração original foi mantida.
+Detail for section 6 of `AGENTS.md`, with examples and procedures. It does not contradict the core; on divergence, the core prevails. The original numbering is kept.
 
 ## 6. TypeScript
 
-Seguir a configuração do compilador do projeto. Não afrouxar opções de verificação para fazer o código compilar.
+Follow the project's compiler configuration. Do not loosen checking options to make the code compile.
 
-### 6.1 `any` e `unknown`
+### 6.1 `any` and `unknown`
 
-- `any` é proibido por padrão. Não usar para contornar erro de compilação, incompatibilidade ou tipo ainda não compreendido.
-- Exceção rara: interoperabilidade com API legada ou biblioteca sem tipagem, quando indispensável. Nesse caso, confinar o `any` ao menor trecho possível, comentar o motivo e não deixá-lo vazar pela assinatura pública.
-- `unknown` é o tipo correto para dados cujo formato ainda não foi comprovado. Usar e incentivar.
-- Refinar todo `unknown` (narrowing, type guard ou schema) antes de usá-lo.
+- `any` is forbidden by default. Do not use it to work around a compilation error, an incompatibility, or a type not yet understood.
+- Rare exception: interoperability with a legacy API or a library without typings, when indispensable. In that case, confine the `any` to the smallest possible scope, comment the reason, and do not let it leak through the public signature.
+- `unknown` is the correct type for data whose shape has not yet been proven. Use and encourage it.
+- Refine every `unknown` (narrowing, type guard, or schema) before using it.
 
-Incorreto — `any` desliga a verificação e se propaga para quem consome o valor:
+Incorrect — `any` turns off checking and propagates to whoever consumes the value:
 
 ```typescript
 function readPort(config: any): number {
@@ -21,50 +21,50 @@ function readPort(config: any): number {
 }
 ```
 
-Correto — `unknown` obriga a provar o formato antes do uso:
+Correct — `unknown` forces proving the shape before use:
 
 ```typescript
 function readPort(config: unknown): number {
   if (typeof config !== "object" || config === null || !("port" in config)) {
-    throw new Error("Configuração sem o campo `port`.");
+    throw new Error("Config is missing the `port` field.");
   }
 
   const { port } = config;
 
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("`port` deve ser um inteiro entre 1 e 65535.");
+    throw new Error("`port` must be an integer between 1 and 65535.");
   }
 
   return port;
 }
 ```
 
-Exceção aceitável — `any` confinado, justificado e validado antes de sair:
+Acceptable exception — `any` confined, justified, and validated before leaving:
 
 ```typescript
-// O cliente legado não publica tipos. O `any` não ultrapassa esta função.
+// The legacy client does not publish types. The `any` does not go beyond this function.
 function readLegacyVersion(client: any): string {
   const version: unknown = client.getVersion();
 
   if (typeof version !== "string") {
-    throw new Error("Versão inesperada retornada pelo cliente legado.");
+    throw new Error("Unexpected version returned by the legacy client.");
   }
 
   return version;
 }
 ```
 
-### 6.2 `type` e `interface`
+### 6.2 `type` and `interface`
 
-Nenhuma das duas construções é universalmente superior.
+Neither construct is universally superior.
 
-- Usar `type` para unions, intersections, aliases, composição e tipos utilitários.
-- Usar `interface` para contratos de objeto quando a extensão ou a implementação por classes trouxer benefício.
-- Não criar interface ou alias redundante para cada objeto. Tipos inferidos e tipos inline são válidos quando claros.
-- Seguir o padrão do projeto quando ele for coerente.
+- Use `type` for unions, intersections, aliases, composition, and utility types.
+- Use `interface` for object contracts when extension or implementation by classes brings benefit.
+- Do not create a redundant interface or alias for every object. Inferred types and inline types are valid when clear.
+- Follow the project's standard when it is coherent.
 
 ```typescript
-type PaymentMethod = "card" | "pix" | "boleto";
+type PaymentMethod = "card" | "bank-transfer" | "cash";
 
 type Page<T> = {
   items: T[];
@@ -84,13 +84,13 @@ class SystemClock implements Clock {
 
 ### 6.3 Generics
 
-- Criar parâmetro de tipo somente quando ele relaciona entradas, saídas ou restrições.
-- Um parâmetro de tipo que aparece uma única vez na assinatura não relaciona nada: remover, ou usar `unknown`.
-- Preferir inferência e assinaturas simples. Evitar parâmetros que o chamador precisa informar manualmente.
-- Usar `extends` quando houver exigência real sobre o tipo.
-- Não criar helpers genéricos universais para operações simples.
+- Create a type parameter only when it relates inputs, outputs, or constraints.
+- A type parameter that appears only once in the signature relates nothing: remove it, or use `unknown`.
+- Prefer inference and simple signatures. Avoid parameters that the caller must specify manually.
+- Use `extends` when there is a real requirement on the type.
+- Do not create universal generic helpers for simple operations.
 
-Útil — `T` liga o tipo dos itens ao do retorno; a constraint expressa uma exigência real:
+Useful — `T` links the item type to the return type; the constraint expresses a real requirement:
 
 ```typescript
 function sortById<T extends { id: string }>(items: readonly T[]): T[] {
@@ -115,7 +115,7 @@ function groupBy<T, K>(items: readonly T[], getKey: (item: T) => K): Map<K, T[]>
 }
 ```
 
-Incorreto — `T` aparece só no retorno; é um cast disfarçado que nada valida:
+Incorrect — `T` appears only in the return; it is a disguised cast that validates nothing:
 
 ```typescript
 function parseJson<T>(text: string): T {
@@ -123,7 +123,7 @@ function parseJson<T>(text: string): T {
 }
 ```
 
-Correto — devolver `unknown` e deixar a validação para quem conhece o contrato:
+Correct — return `unknown` and leave validation to whoever knows the contract:
 
 ```typescript
 function parseJson(text: string): unknown {
@@ -131,16 +131,16 @@ function parseJson(text: string): unknown {
 }
 ```
 
-### 6.4 Casts e asserções
+### 6.4 Casts and assertions
 
-- Evitar `as`, `as unknown as`, non-null assertion (`!`) e qualquer construção que silencie o compilador.
-- Preferir narrowing, type guards, schemas e contratos explícitos.
-- Não usar cast para fingir que um dado externo foi validado.
-- Quando um cast for inevitável, restringi-lo a um ponto e comentar a garantia que o sustenta.
-- `as const` e `satisfies` não silenciam o compilador e são permitidos.
-- Não suprimir erros com diretivas de comentário (`@ts-ignore`, `@ts-expect-error`) sem justificativa escrita ao lado.
+- Avoid `as`, `as unknown as`, the non-null assertion (`!`), and any construct that silences the compiler.
+- Prefer narrowing, type guards, schemas, and explicit contracts.
+- Do not use a cast to pretend that external data was validated.
+- When a cast is unavoidable, restrict it to a single point and comment the guarantee that supports it.
+- `as const` and `satisfies` do not silence the compiler and are allowed.
+- Do not suppress errors with comment directives (`@ts-ignore`, `@ts-expect-error`) without a written justification next to them.
 
-Incorreto:
+Incorrect:
 
 ```typescript
 type User = { id: string; email: string };
@@ -156,7 +156,7 @@ function emailOf(users: User[], id: string): string {
 }
 ```
 
-Correto:
+Correct:
 
 ```typescript
 type User = { id: string; email: string };
@@ -176,13 +176,13 @@ async function fetchUser(url: string): Promise<User> {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Serviço de usuários respondeu ${response.status}.`);
+    throw new Error(`Users service responded with ${response.status}.`);
   }
 
   const body: unknown = await response.json();
 
   if (!isUser(body)) {
-    throw new Error("Resposta inesperada do serviço de usuários.");
+    throw new Error("Unexpected response from the users service.");
   }
 
   return body;
@@ -193,17 +193,17 @@ function emailOf(users: readonly User[], id: string): string | undefined {
 }
 ```
 
-Se o projeto já adota uma biblioteca de schemas, usá-la no lugar de type guards manuais.
+If the project already adopts a schema library, use it instead of manual type guards.
 
-### 6.5 Tipos de domínio e contratos
+### 6.5 Domain types and contracts
 
-- Tipos TypeScript não existem em runtime. Não presumir que um tipo garante a validade de um dado externo.
-- Modelar estados de forma que combinações inválidas não sejam representáveis. Evitar objetos com muitos opcionais e contratos vagos.
-- Usar branded types ou tipos específicos somente quando houver risco concreto de confundir identificadores, unidades ou estados, e a segurança obtida compensar a complexidade.
-- Separar tipos de domínio, DTOs e modelos de persistência quando os contratos forem realmente diferentes. Não duplicar tipos idênticos entre camadas, aplicações ou pacotes.
-- Restringir mutabilidade (`readonly`, `as const`) quando proteger invariantes. Não tornar todo tipo artificialmente complexo.
+- TypeScript types do not exist at runtime. Do not presume that a type guarantees the validity of external data.
+- Model states so that invalid combinations are not representable. Avoid objects with many optional fields and vague contracts.
+- Use branded types or specific types only when there is a concrete risk of mixing up identifiers, units, or states, and the safety gained outweighs the complexity.
+- Separate domain types, DTOs, and persistence models when the contracts really differ. Do not duplicate identical types across layers, applications, or packages.
+- Restrict mutability (`readonly`, `as const`) when it protects invariants. Do not make every type artificially complex.
 
-Incorreto — permite `status: "paid"` sem `paidAt`, ou `failureReason` em pagamento pago:
+Incorrect — allows `status: "paid"` without `paidAt`, or `failureReason` on a paid payment:
 
 ```typescript
 type Payment = {
@@ -213,7 +213,7 @@ type Payment = {
 };
 ```
 
-Correto — cada estado carrega exatamente os dados que possui:
+Correct — each state carries exactly the data it has:
 
 ```typescript
 type Payment =
@@ -222,7 +222,7 @@ type Payment =
   | { status: "failed"; failureReason: string };
 ```
 
-Branded type, quando trocar identificadores for um risco real:
+Branded type, when swapping identifiers is a real risk:
 
 ```typescript
 type UserId = string & { readonly __brand: "UserId" };
@@ -230,10 +230,10 @@ type OrderId = string & { readonly __brand: "OrderId" };
 
 function toUserId(value: string): UserId {
   if (value.trim() === "") {
-    throw new Error("UserId vazio.");
+    throw new Error("Empty UserId.");
   }
 
-  // Cast único e justificado: o valor acabou de ser validado nesta fronteira.
+  // Single, justified cast: the value was just validated at this boundary.
   return value as UserId;
 }
 ```

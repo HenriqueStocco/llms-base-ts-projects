@@ -1,19 +1,19 @@
 @AGENTS.md
 
-## Arquivos ignorados pelo agente (.claudeignore)
+## Files ignored by the agent (.claudeignore)
 
-- Todo caminho listado em `.claudeignore` (sintaxe do `.gitignore`) **não deve ser lido, modificado nem usado** pelo agente, nem para inspeção, nem para depuração, nem como exemplo.
-- Antes de ler, editar ou citar um arquivo sensível, conferir se ele casa com `.claudeignore`.
-- Se a tarefa exigir um caminho ignorado, parar e pedir ao usuário. Não contornar com `cat`, `grep`, `sed`, scripts ou outra ferramenta.
-- Não copiar o conteúdo de caminhos ignorados para respostas, commits, logs ou testes.
-- Esta regra é comportamental. A aplicação técnica é feita por `.claude/hooks/guard-paths.sh` e pelas regras `permissions.deny` de `.claude/settings.json`.
+- Every path listed in `.claudeignore` (`.gitignore` syntax) **must not be read, modified, or used** by the agent, not for inspection, not for debugging, not as an example.
+- Before reading, editing, or quoting a sensitive file, check whether it matches `.claudeignore`.
+- If the task requires an ignored path, stop and ask the user. Do not work around it with `cat`, `grep`, `sed`, scripts, or any other tool.
+- Do not copy the content of ignored paths into answers, commits, logs, or tests.
+- This rule is behavioral. Technical enforcement is done by `.claude/hooks/guard-paths.sh` and by the `permissions.deny` rules in `.claude/settings.json`.
 
-## Proteções, modelos e delegação
+## Protections, models, and delegation
 
-Detalhe e tabela de papéis: `docs/agents/claude-code.md` (ler antes de alterar permissões, hooks ou subagentes).
+Detail and role table: `docs/agents/claude-code.md` (read before changing permissions, hooks, or subagents).
 
-- Não editar `.claude/**`, `.claudeignore` nem os settings do usuário, e não contornar isso por Bash. Proteção que precise mudar: escrever a proposta em `proposals/claude/` e pedir ao usuário que aplique.
-- Permissão negada ou hook que bloqueou: ajustar a abordagem, nunca repetir o mesmo comando nem procurar outro caminho para o mesmo efeito.
-- O modelo e o esforço da sessão são escolha do usuário; não tentar trocá-los. Se a tarefa pedir outro (ex.: bug difícil que o modelo atual não resolveu em 2 tentativas), sugerir.
-- Delegar a subagente leituras amplas do repositório, execução de testes e análise de logs, para manter o contexto principal pequeno. Revisão de diff, em subagente com contexto limpo.
-- Subagentes herdam as mesmas permissões e proibições; modelo menor não amplia o que pode ser feito.
+- Do not edit `.claude/**`, `.claudeignore`, or the user's settings, and do not work around this through Bash. If a protection needs to change: write the proposal in `proposals/claude/` and ask the user to apply it.
+- Permission denied or a hook blocked the action: adjust the approach; never repeat the same command or look for another path to the same effect.
+- The session's model and effort are the user's choice; do not try to change them. If the task calls for another one (e.g., a hard bug the current model did not solve in 2 attempts), suggest it.
+- Delegate to a subagent broad repository reads, test execution, and log analysis, to keep the main context small. Diff review goes to a subagent with a clean context.
+- Subagents inherit the same permissions and prohibitions; a smaller model does not widen what can be done.

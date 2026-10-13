@@ -1,276 +1,276 @@
-# Tooling de qualidade, hooks e CI
+# Quality tooling, hooks, and CI
 
-Detalhe das seções 15 de `AGENTS.md`, com exemplos e procedimentos. Não contradiz o núcleo; em caso de divergência, vale o núcleo. A numeração original foi mantida.
+Detail for section 15 of `AGENTS.md`, with examples and procedures. It does not contradict the core; on divergence, the core prevails. The original numbering is kept.
 
-## 15. Tooling de qualidade, hooks e CI
+## 15. Quality tooling, hooks, and CI
 
-Regras **comportamentais** (este documento) orientam o julgamento do agente. Verificações **automatizadas** impõem o que pode ser checado por máquina. Uma não substitui a outra.
+**Behavioral** rules (this document) guide the agent's judgment. **Automated** checks enforce what a machine can verify. One does not replace the other.
 
-### 15.1 Controles e política
+### 15.1 Controls and policy
 
-Controles proporcionais ao projeto:
+Controls proportional to the project:
 
-- Formatador e lint.
+- Formatter and lint.
 - Typecheck.
-- Testes direcionados e suíte completa.
+- Targeted tests and full suite.
 - Build.
-- Detecção de código e dependências não utilizados.
-- Consistência de versões de dependências.
-- Scanner de segredos.
-- Verificação de dependências e vulnerabilidades.
-- Hooks de Git.
-- Hooks do agente, quando a plataforma oferecer.
-- CI obrigatório em branches protegidas.
-- Proteções para comandos destrutivos e operações sensíveis.
+- Detection of unused code and dependencies.
+- Dependency version consistency.
+- Secret scanner.
+- Dependency and vulnerability checks.
+- Git hooks.
+- Agent hooks, when the platform offers them.
+- Mandatory CI on protected branches.
+- Safeguards for destructive commands and sensitive operations.
 
-Nenhum desses controles é capacidade universal. Verificar o que o projeto e a plataforma realmente oferecem; não presumir que um hook ou uma checagem existe.
+None of these controls is a universal capability. Verify what the project and the platform actually offer; do not assume a hook or a check exists.
 
-Política:
+Policy:
 
-- Não ignorar verificação essencial em silêncio.
-- Não usar mecanismo de bypass (pular hooks, desativar regra, marcar teste como ignorado) para contornar falha sem autorização e justificativa registrada.
-- Não declarar verificação aprovada sem evidência: comando executado e resultado obtido. Não fingir que uma ferramenta está instalada.
-- Durante o desenvolvimento, preferir verificações direcionadas e rápidas. Não executar suíte muito lenta a cada passo quando uma verificação mais eficiente for adequada. Executar as verificações completas aplicáveis antes de concluir, ou registrar por que não foi possível.
-- Tratar o CI como a fonte de validação reproduzível.
-- Tratar hooks locais como proteção complementar, não como substitutos do CI. Toda validação crítica também existe no CI.
+- Do not silently skip an essential check.
+- Do not use a bypass mechanism (skipping hooks, disabling a rule, marking a test as ignored) to get around a failure without authorization and a recorded justification.
+- Do not declare a check passed without evidence: the command executed and the result obtained. Do not pretend a tool is installed.
+- During development, prefer targeted, fast checks. Do not run a very slow suite at every step when a more efficient check is adequate. Run the applicable full checks before concluding, or record why it was not possible.
+- Treat CI as the source of reproducible validation.
+- Treat local hooks as complementary protection, not as a substitute for CI. Every critical validation also exists in CI.
 
-### 15.2 Ferramentas padrão
+### 15.2 Default tools
 
-Padrão preferido dos projetos cobertos por este documento, salvo incompatibilidade técnica comprovada ou decisão explícita do projeto:
+Preferred default for the projects covered by this document, unless there is proven technical incompatibility or an explicit project decision:
 
-| Ferramenta | Função |
+| Tool | Role |
 | --- | --- |
-| **Biome** | Formatação e lint. |
-| **Knip** | Arquivos, exports e dependências não utilizados. |
-| **Syncpack** | Consistência de versões de dependências entre manifestos. |
-| **Scripts Bash + Git hooks** | Validações automáticas e padronização de mensagens de commit. |
+| **Biome** | Formatting and lint. |
+| **Knip** | Unused files, exports, and dependencies. |
+| **Syncpack** | Dependency version consistency across manifests. |
+| **Bash scripts + Git hooks** | Automated validations and commit message standardization. |
 
-Esse padrão não autoriza ignorar a stack existente. Antes de instalar ou configurar qualquer ferramenta:
+This default does not authorize ignoring the existing stack. Before installing or configuring any tool:
 
-1. Verificar se ela já está instalada.
-2. Examinar versões, scripts e configuração existentes.
-3. Consultar a documentação compatível com a versão instalada. Comandos, flags e opções mudam entre versões principais.
-4. Verificar a compatibilidade com Bun, Node.js, o gerenciador de pacotes e o formato do repositório.
-5. Reutilizar e completar a configuração existente quando apropriado.
-6. Não duplicar funcionalidade sem benefício concreto.
-7. Não substituir em silêncio outra ferramenta já estabelecida.
-8. Registrar toda exceção técnica relevante.
+1. Check whether it is already installed.
+2. Examine existing versions, scripts, and configuration.
+3. Consult the documentation compatible with the installed version. Commands, flags, and options change between major versions.
+4. Check compatibility with Bun, Node.js, the package manager, and the repository layout.
+5. Reuse and complete the existing configuration when appropriate.
+6. Do not duplicate functionality without concrete benefit.
+7. Do not silently replace another established tool.
+8. Record every relevant technical exception.
 
-Regras:
+Rules:
 
-- Não inventar nomes de opções, scripts, flags ou comandos. Usar os scripts do manifesto e a ajuda da versão instalada.
-- Se uma ferramenta for incompatível com o projeto, documentar o motivo e propor a alternativa mínima necessária.
-- A ausência de uma ferramenta padrão é um achado de classe **Atenção** (4.3). Instalar ou configurar tooling é tarefa própria: não fazê-lo como efeito colateral de outra tarefa.
+- Do not invent option, script, flag, or command names. Use the manifest scripts and the help of the installed version.
+- If a tool is incompatible with the project, document the reason and propose the minimum necessary alternative.
+- The absence of a default tool is a finding of class **Attention** (4.3). Installing or configuring tooling is its own task: do not do it as a side effect of another task.
 
 ### 15.3 Biome
 
-Ferramenta padrão de formatação e lint, quando a versão instalada suportar as linguagens do projeto.
+Default formatting and lint tool, when the installed version supports the project's languages.
 
-- Configurar regras consistentes e compatíveis com o projeto.
-- Usar modo de verificação, sem escrita, no CI.
-- Aplicar correções automáticas somente nos arquivos do escopo pretendido, e revisar o resultado.
-- Não ignorar regra sem justificativa escrita junto à supressão.
-- Não desabilitar regra globalmente para resolver um problema localizado.
-- Não executar formatadores concorrentes sobre os mesmos arquivos.
-- Não afirmar que o projeto está formatado sem executar a verificação correspondente.
-- A separação visual da seção 9 continua obrigatória onde o formatador não a impõe.
+- Configure rules that are consistent and compatible with the project.
+- Use check mode, without writing, in CI.
+- Apply automatic fixes only to files in the intended scope, and review the result.
+- Do not ignore a rule without a written justification next to the suppression.
+- Do not disable a rule globally to solve a localized problem.
+- Do not run competing formatters on the same files.
+- Do not claim the project is formatted without running the corresponding check.
+- The visual separation in section 9 remains mandatory where the formatter does not enforce it.
 
 ### 15.4 Knip
 
-Configurar respeitando entry points, plugins e particularidades do projeto.
+Configure it respecting the project's entry points, plugins, and particularities.
 
-- Executar após mudanças relevantes em arquivos, exports, scripts ou dependências.
-- Investigar cada resultado antes de remover qualquer coisa. A ausência de referência estática não prova que algo é desnecessário.
-- Verificar entry points, imports dinâmicos, convenções de frameworks e plugins, scripts do manifesto, configuração de CI e arquivos referenciados indiretamente.
-- Não remover arquivo ou export apenas porque a análise não detectou uso.
-- Não fazer remoção em massa sem revisar o impacto.
-- Não ignorar falsos positivos globalmente. Preferir exceções localizadas, documentadas e justificadas.
-- Reavaliar as regras de ignore quando o código mudar.
+- Run it after relevant changes to files, exports, scripts, or dependencies.
+- Investigate every result before removing anything. The absence of a static reference does not prove something is unnecessary.
+- Check entry points, dynamic imports, framework conventions and plugins, manifest scripts, CI configuration, and indirectly referenced files.
+- Do not remove a file or export merely because the analysis did not detect usage.
+- Do not do mass removal without reviewing the impact.
+- Do not ignore false positives globally. Prefer localized, documented, and justified exceptions.
+- Reassess the ignore rules when the code changes.
 
 ### 15.5 Syncpack
 
-Manter versões e manifestos consistentes, especialmente em monorepos. O objetivo é consistência compatível, não uniformidade artificial.
+Keep versions and manifests consistent, especially in monorepos. The goal is compatible consistency, not artificial uniformity.
 
-- Verificar a configuração existente, as políticas de versão, as dependências internas e as exceções necessárias.
-- Executar a verificação de consistência após mudanças em dependências.
-- Corrigir divergências de forma intencional, avaliando a compatibilidade antes de sincronizar.
-- Não alinhar às cegas versões incompatíveis.
-- Não atualizar dependência apenas para eliminar diferença numérica.
-- Não alterar lockfile sem entender a causa e revisar o resultado.
-- Preservar exceções justificadas de ferramentas, runtimes ou pacotes que exigem versões distintas.
+- Check the existing configuration, version policies, internal dependencies, and necessary exceptions.
+- Run the consistency check after dependency changes.
+- Fix divergences intentionally, assessing compatibility before synchronizing.
+- Do not blindly align incompatible versions.
+- Do not update a dependency just to eliminate a numeric difference.
+- Do not change the lockfile without understanding the cause and reviewing the result.
+- Preserve justified exceptions for tools, runtimes, or packages that require distinct versions.
 
-### 15.6 Scripts Bash
+### 15.6 Bash scripts
 
-Centralizar validações e regras de commit em scripts Bash versionados, quando o ambiente for compatível. Os hooks chamam os scripts; não duplicam comandos longos.
+Centralize validations and commit rules in versioned Bash scripts, when the environment is compatible. Hooks call the scripts; they do not duplicate long commands.
 
-Cada script:
+Each script:
 
-- Tem nome e responsabilidade claros.
-- Falha com código de saída diferente de zero e propaga erros dos comandos que executa.
-- Emite mensagens claras, na saída de erro, dizendo o que falhou e como corrigir.
-- Não imprime segredos.
-- Não executa comando destrutivo como efeito colateral de uma validação.
-- É previsível e reproduzível: mesma entrada, mesmo resultado.
-- Verifica a existência dos comandos de que depende e informa quando faltam.
-- Não depende do diretório de execução: resolve caminhos a partir da raiz do repositório.
-- Usa quoting consistente e trata caminhos com espaços.
-- Tem teste quando contém lógica relevante.
+- Has a clear name and responsibility.
+- Fails with a nonzero exit code and propagates errors from the commands it runs.
+- Emits clear messages, on the error output, saying what failed and how to fix it.
+- Does not print secrets.
+- Does not run a destructive command as a side effect of a validation.
+- Is predictable and reproducible: same input, same result.
+- Checks that the commands it depends on exist and reports when they are missing.
+- Does not depend on the working directory: it resolves paths from the repository root.
+- Uses consistent quoting and handles paths with spaces.
+- Has a test when it contains relevant logic.
 
-Plataforma de referência: Linux, em mais de uma distribuição. Os scripts funcionam sem alteração em distribuições diferentes (por exemplo, Ubuntu e Arch):
+Reference platform: Linux, across more than one distribution. Scripts work without changes on different distributions (for example, Ubuntu and Arch):
 
-- Declarar `#!/usr/bin/env bash` e executar com Bash. Não depender de `/bin/sh`: em algumas distribuições ele é o Bash, em outras é um shell mais restrito.
-- Não presumir a mesma versão de Bash, de utilitários ou de ferramentas instaladas: distribuições de lançamento contínuo e de lançamento fixo divergem.
-- Não chamar gerenciador de pacotes do sistema (`apt`, `pacman` etc.) nem depender de caminhos específicos de uma distribuição. Verificar se o comando existe e informar o que falta.
-- macOS e Windows só entram como requisito quando o projeto declarar suporte; nesse caso, declarar os requisitos e evitar extensões exclusivas dos utilitários GNU.
+- Declare `#!/usr/bin/env bash` and run with Bash. Do not depend on `/bin/sh`: on some distributions it is Bash, on others it is a more restricted shell.
+- Do not assume the same version of Bash, utilities, or installed tools: rolling-release and fixed-release distributions diverge.
+- Do not call the system package manager (`apt`, `pacman`, etc.) or depend on distribution-specific paths. Check whether the command exists and report what is missing.
+- macOS and Windows become a requirement only when the project declares support; in that case, declare the requirements and avoid extensions exclusive to the GNU utilities.
 
-Exemplo — validação de mensagem para o hook `commit-msg`. O Git passa como primeiro argumento o caminho do arquivo que contém a mensagem:
+Example — message validation for the `commit-msg` hook. Git passes the path of the file containing the message as the first argument:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
-message_file="${1:?uso: commit-msg <arquivo-da-mensagem>}"
+message_file="${1:?usage: commit-msg <message-file>}"
 pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: .+'
 
 IFS= read -r subject < "$message_file" || true
 
 if [[ ! "$subject" =~ $pattern ]]; then
-  echo "Mensagem de commit inválida: \"$subject\"" >&2
-  echo "Formato esperado: <type>(<scope>): <description>" >&2
+  echo "Invalid commit message: \"$subject\"" >&2
+  echo "Expected format: <type>(<scope>): <description>" >&2
   exit 1
 fi
 ```
 
-Tipos, escopos e exceções (commits de merge ou de revert gerados pelo Git, por exemplo) seguem a convenção do projeto (17.3).
+Types, scopes, and exceptions (merge or revert commits generated by Git, for example) follow the project's convention (17.3).
 
 ### 15.7 Git hooks
 
-Todo projeto adota hooks locais para os eventos abaixo. Verificar a semântica real de cada hook na documentação do Git e do gerenciador de hooks em uso antes de configurá-lo.
+Every project adopts local hooks for the events below. Check the real semantics of each hook in the documentation of Git and of the hook manager in use before configuring it.
 
-| Hook | Momento | Responsabilidade |
+| Hook | When | Responsibility |
 | --- | --- | --- |
-| `commit-msg` | Depois de escrita a mensagem, antes de o commit ser criado. | Validar a mensagem. |
-| `pre-commit` | Antes de o commit ser criado. | Verificações rápidas sobre o conteúdo staged. |
-| `pre-push` | Antes de o push transferir dados ao remoto. | Verificações adicionais antes de publicar. |
+| `commit-msg` | After the message is written, before the commit is created. | Validate the message. |
+| `pre-commit` | Before the commit is created. | Fast checks on the staged content. |
+| `pre-push` | Before the push transfers data to the remote. | Additional checks before publishing. |
 
 **`commit-msg`**
 
-- Validar a mensagem real recebida do Git, sem texto fixo no script.
-- Aplicar a convenção de commits do projeto (17.3).
-- Rejeitar mensagem vazia ou fora do padrão, com erro claro e acionável.
+- Validate the actual message received from Git, with no fixed text in the script.
+- Apply the project's commit convention (17.3).
+- Reject an empty or non-conforming message, with a clear and actionable error.
 
 **`pre-commit`**
 
-- Verificar os arquivos que serão commitados, não o repositório inteiro.
-- Verificar ou aplicar formatação e lint, conforme a política do projeto.
-- Detectar arquivos proibidos, artefatos indevidos e segredos, quando houver ferramenta disponível.
-- Não executar a suíte E2E nem verificações lentas a cada commit.
-- Se o formatador modificar arquivos, garantir que o commit contenha o resultado formatado **sem** incluir alterações que o usuário não havia colocado em stage. Arquivos parcialmente staged exigem cuidado: adicionar o arquivo inteiro de volta incluiria o que foi deixado de fora de propósito.
+- Check the files that will be committed, not the entire repository.
+- Check or apply formatting and lint, according to the project's policy.
+- Detect forbidden files, improper artifacts, and secrets, when a tool is available.
+- Do not run the E2E suite or slow checks on every commit.
+- If the formatter modifies files, ensure the commit contains the formatted result **without** including changes the user had not staged. Partially staged files require care: adding the whole file back would include what was deliberately left out.
 
 **`pre-push`**
 
-- Executar typecheck, testes direcionados e demais verificações relevantes ao projeto.
-- Identificar o destino (o Git informa o remoto e as referências ao hook) e bloquear publicações que violem as regras do projeto.
-- Não fazer deploy nem operações adicionais inesperadas.
-- Não repetir verificações lentas que o CI já executa por completo.
+- Run typecheck, targeted tests, and other checks relevant to the project.
+- Identify the destination (Git passes the remote and the refs to the hook) and block publications that violate the project's rules.
+- Do not deploy or perform additional unexpected operations.
+- Do not repeat slow checks that CI already runs in full.
 
 **`push`**
 
-O Git **não possui** um hook de cliente chamado `push`, e `pre-push` não é equivalente a ele. No cliente, o hook do estágio de publicação é `pre-push`. Hooks que executam após o recebimento dos dados (`pre-receive`, `update`, `post-receive`) rodam no servidor e dependem do provedor de hospedagem.
+Git **does not have** a client hook called `push`, and `pre-push` is not equivalent to it. On the client, the hook for the publishing stage is `pre-push`. Hooks that run after the data is received (`pre-receive`, `update`, `post-receive`) run on the server and depend on the hosting provider.
 
-- Se o gerenciador de hooks ou a plataforma do projeto oferecer um evento próprio para esse estágio, documentar sua finalidade e não duplicar o que `pre-push` já cobre.
-- Se não oferecer, não inventar o hook. Colocar a proteção em `pre-push` e no CI, e informar a limitação.
+- If the project's hook manager or platform offers its own event for this stage, document its purpose and do not duplicate what `pre-push` already covers.
+- If it does not, do not invent the hook. Put the safeguard in `pre-push` and in CI, and report the limitation.
 
-**Instalação e manutenção**
+**Installation and maintenance**
 
-- Verificar como os hooks são instalados e ativados. O Git só executa hooks no diretório de hooks efetivo: o padrão, dentro do diretório `.git` e não versionado, ou o definido por `core.hooksPath`.
-- Um diretório de hooks versionado não tem efeito até ser ativado, pelo gerenciador de hooks ou por `core.hooksPath`.
-- Garantir instalação reproduzível para novos colaboradores e documentar como reinstalar e validar.
-- Não contornar hooks para concluir uma tarefa mais rápido (15.1).
+- Check how hooks are installed and activated. Git only runs hooks in the effective hooks directory: the default one, inside the `.git` directory and not versioned, or the one set by `core.hooksPath`.
+- A versioned hooks directory has no effect until it is activated, by the hook manager or by `core.hooksPath`.
+- Ensure reproducible installation for new collaborators and document how to reinstall and validate.
+- Do not bypass hooks to finish a task faster (15.1).
 
-### 15.8 Segurança dos hooks
+### 15.8 Hook security
 
-Hooks executam código arbitrário na máquina de cada colaborador e fazem parte da superfície de ataque.
+Hooks execute arbitrary code on each collaborator's machine and are part of the attack surface.
 
-- Inspecionar os scripts e as ferramentas executados pelos hooks.
-- Não introduzir download ou instalação remota não verificada durante um commit ou push.
-- Não armazenar credenciais nos scripts.
-- Não usar `eval` nem execução dinâmica de conteúdo não confiável.
-- Evitar permissões excessivas.
-- Não alterar arquivos fora do escopo do commit.
-- Não mascarar erro nem retornar sucesso artificial.
-- Evitar loops, instalações recursivas e execução duplicada das mesmas verificações.
-- Emitir mensagem clara quando uma dependência estiver ausente.
-- Não desabilitar hooks como solução permanente para um erro de configuração: corrigir a configuração.
+- Inspect the scripts and tools executed by hooks.
+- Do not introduce unverified remote download or installation during a commit or push.
+- Do not store credentials in scripts.
+- Do not use `eval` or dynamic execution of untrusted content.
+- Avoid excessive permissions.
+- Do not change files outside the scope of the commit.
+- Do not mask errors or return artificial success.
+- Avoid loops, recursive installations, and duplicate execution of the same checks.
+- Emit a clear message when a dependency is missing.
+- Do not disable hooks as a permanent solution to a configuration error: fix the configuration.
 
-### 15.9 Arquivos essenciais do repositório
+### 15.9 Essential repository files
 
-Avaliar presença e adequação. Criar ou atualizar somente o que for aplicável e necessário.
+Assess presence and adequacy. Create or update only what is applicable and necessary.
 
 **`.gitignore`**
 
-- Ignorar dependências instaladas, artefatos gerados, caches, logs e arquivos locais não versionáveis.
-- Ignorar `.env` e demais arquivos de credenciais, mantendo exceção explícita para modelos seguros, como `.env.example`.
-- Não ignorar arquivos necessários ao build ou ao desenvolvimento. Evitar padrões amplos que escondam arquivos importantes.
-- Adicionar uma regra não remove do índice um arquivo já rastreado: isso exige tratamento específico.
-- Não remover arquivos rastreados sem compreender o impacto. Um segredo que já foi commitado continua no histórico e deve ser tratado como comprometido.
+- Ignore installed dependencies, generated artifacts, caches, logs, and local files that must not be versioned.
+- Ignore `.env` and other credential files, keeping an explicit exception for safe templates, such as `.env.example`.
+- Do not ignore files needed for build or development. Avoid broad patterns that hide important files.
+- Adding a rule does not remove an already tracked file from the index: that requires specific handling.
+- Do not remove tracked files without understanding the impact. A secret that has already been committed remains in the history and must be treated as compromised.
 
 **`.gitattributes`**
 
-- Definir normalização de fim de linha coerente quando necessário (por exemplo, `text=auto`) e marcar formatos binários.
-- Evitar diffs espúrios entre sistemas operacionais. Preservar binários e formatos especiais.
-- Avaliar o impacto antes de aplicar uma normalização em massa a arquivos existentes: ela altera muitos arquivos de uma vez.
-- Não impor regras indiscriminadas a todos os arquivos.
+- Define consistent line-ending normalization when necessary (for example, `text=auto`) and mark binary formats.
+- Avoid spurious diffs across operating systems. Preserve binaries and special formats.
+- Assess the impact before applying mass normalization to existing files: it changes many files at once.
+- Do not impose indiscriminate rules on all files.
 
-**`.claudeignore` e arquivos de exclusão de contexto de agentes**
+**`.claudeignore` and agent context exclusion files**
 
-- Verificar, na documentação da ferramenta e da versão em uso, se o arquivo é reconhecido e qual é sua semântica. Não presumir suporte.
-- Não é mecanismo universal nem barreira de segurança. Nunca depender dele para proteger segredos.
-- Quando reconhecido, usá-lo para reduzir contexto irrelevante: artefatos, arquivos gerados, caches e dados locais.
-- Não excluir arquivos essenciais ao entendimento do projeto.
-- Distinguir três coisas: arquivo ignorado pelo Git, arquivo omitido do contexto do agente e arquivo protegido por controle de acesso.
-- Se a ferramenta não reconhecer o arquivo, informar a limitação e usar o mecanismo oficialmente suportado por ela (regras de permissão ou de negação de leitura, por exemplo).
+- Check, in the documentation of the tool and version in use, whether the file is recognized and what its semantics are. Do not assume support.
+- It is not a universal mechanism or a security barrier. Never rely on it to protect secrets.
+- When recognized, use it to reduce irrelevant context: artifacts, generated files, caches, and local data.
+- Do not exclude files essential to understanding the project.
+- Distinguish three things: a file ignored by Git, a file omitted from the agent's context, and a file protected by access control.
+- If the tool does not recognize the file, report the limitation and use the mechanism officially supported by it (read-deny or permission rules, for example).
 
-**Demais arquivos**
+**Other files**
 
-Inspecionar, conforme a stack: manifesto (`package.json`), lockfile do gerenciador em uso, `tsconfig.json`, configurações do Biome, do Knip e do Syncpack, scripts de validação, configuração e instalação dos hooks, configuração de CI.
+Inspect, according to the stack: manifest (`package.json`), lockfile of the package manager in use, `tsconfig.json`, Biome, Knip, and Syncpack configurations, validation scripts, hook configuration and installation, CI configuration.
 
-### 15.10 Ordem de implementação do tooling
+### 15.10 Tooling implementation order
 
-Ao adotar ou atualizar tooling em um projeto existente:
+When adopting or updating tooling in an existing project:
 
-1. Inspecionar ferramentas, versões, scripts e hooks existentes.
-2. Identificar o que já funciona e o que falta.
-3. Definir as verificações e os contratos necessários.
-4. Reutilizar as configurações válidas.
-5. Implementar as mudanças mínimas.
-6. Validar scripts e configurações.
-7. Executar as verificações locais.
-8. Inspecionar o diff e o estado do Git.
-9. Documentar exceções, limitações e comandos relevantes.
+1. Inspect existing tools, versions, scripts, and hooks.
+2. Identify what already works and what is missing.
+3. Define the necessary checks and contracts.
+4. Reuse the valid configurations.
+5. Implement the minimum changes.
+6. Validate scripts and configurations.
+7. Run the local checks.
+8. Inspect the diff and the Git state.
+9. Document exceptions, limitations, and relevant commands.
 
-Não substituir toda a configuração do projeto para obter um padrão visualmente uniforme.
+Do not replace the project's entire configuration to get a visually uniform standard.
 
-Quando a tarefa for apenas criar ou atualizar instruções para agentes, não instalar dependências, não configurar hooks reais e não modificar os demais arquivos do projeto.
+When the task is only to create or update instructions for agents, do not install dependencies, do not configure real hooks, and do not modify the other files of the project.
 
-### 15.11 Regras verificáveis por ferramenta
+### 15.11 Rules verifiable by tool
 
-Quando o projeto tiver o controle correspondente, usá-lo como evidência. Ao configurar um projeto novo, preferir automatizar:
+When the project has the corresponding control, use it as evidence. When configuring a new project, prefer to automate:
 
-| Regra | Verificação possível |
+| Rule | Possible check |
 | --- | --- |
-| Tipagem estrita (6) | Modo `strict` do compilador; opções adicionais de rigor conforme o projeto. |
-| `any` explícito, non-null assertion, supressões (6.1, 6.4) | Regras de lint (Biome). |
-| `catch` vazio, promessas não tratadas (11) | Regras de lint, conforme o suporte da versão instalada. |
-| Formatação (9) | Formatador em modo de verificação (Biome). |
-| Nomes de arquivos (8.1) | Regra de lint de nomenclatura, se disponível. |
-| Código, exports e dependências sem uso (8.4, 14) | Knip. |
-| Versões divergentes entre manifestos (7.1, 14) | Syncpack. |
-| Dependências circulares e fronteiras entre pacotes (7) | Análise de grafo de dependências ou regras de lint. |
-| Mensagem de commit (17.3) | Hook `commit-msg`. |
-| Segredos em commits (5.2) | Scanner de segredos, em `pre-commit` e no CI. |
-| Dependências vulneráveis (14) | Auditoria de dependências. |
-| Comportamento (12) | Testes em `pre-push` (direcionados) e no CI (completos). |
+| Strict typing (6) | Compiler `strict` mode; additional strictness options per project. |
+| Explicit `any`, non-null assertion, suppressions (6.1, 6.4) | Lint rules (Biome). |
+| Empty `catch`, unhandled promises (11) | Lint rules, depending on installed version support. |
+| Formatting (9) | Formatter in check mode (Biome). |
+| File names (8.1) | Naming lint rule, if available. |
+| Unused code, exports, and dependencies (8.4, 14) | Knip. |
+| Divergent versions across manifests (7.1, 14) | Syncpack. |
+| Circular dependencies and boundaries between packages (7) | Dependency graph analysis or lint rules. |
+| Commit message (17.3) | `commit-msg` hook. |
+| Secrets in commits (5.2) | Secret scanner, in `pre-commit` and in CI. |
+| Vulnerable dependencies (14) | Dependency audit. |
+| Behavior (12) | Tests in `pre-push` (targeted) and in CI (full). |
 
-O restante depende de revisão do diff.
+The rest depends on diff review.
 

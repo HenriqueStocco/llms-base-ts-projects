@@ -1,22 +1,22 @@
-# Arquitetura, nomes, formatação e comentários
+# Architecture, naming, formatting, and comments
 
-Detalhe das seções 7 a 10 de `AGENTS.md`, com exemplos e procedimentos. Não contradiz o núcleo; em caso de divergência, vale o núcleo. A numeração original foi mantida.
+Detail for sections 7 to 10 of `AGENTS.md`, with examples and procedures. It does not contradict the core; on divergence, the core prevails. The original numbering is kept.
 
-## 7. Arquitetura e organização de responsabilidades
+## 7. Architecture and organization of responsibilities
 
-Critérios, não uma estrutura obrigatória.
+Criteria, not a mandatory structure.
 
-- Organizar módulos por responsabilidade ou domínio, conforme o contexto do projeto.
-- Manter fronteiras de dependência claras e sem ciclos.
-- Evitar módulos que concentrem responsabilidades sem relação.
-- Extrair código compartilhado somente com benefício real e uso concreto.
-- Não criar camadas, interfaces, factories, repositories ou services automaticamente.
-- Não impor Clean Architecture, DDD, MVC, CQRS ou outro padrão. Adotá-los quando a complexidade e os requisitos justificarem, ou quando o projeto já os utilizar de forma coerente.
-- Não colocar regra de negócio em local inadequado (handler, componente de UI, consulta) apenas para reduzir a quantidade de arquivos.
-- Reconhecer quando um módulo precisa crescer, ser dividido ou reorganizado: múltiplos motivos independentes de mudança, testes que exigem preparar contexto sem relação, alterações que tocam sempre os mesmos pontos distantes.
-- Considerar o custo de mudança: preferir estruturas que tornem a próxima alteração provável local e barata.
+- Organize modules by responsibility or domain, according to the project context.
+- Keep dependency boundaries clear and free of cycles.
+- Avoid modules that concentrate unrelated responsibilities.
+- Extract shared code only with real benefit and concrete use.
+- Do not create layers, interfaces, factories, repositories, or services automatically.
+- Do not impose Clean Architecture, DDD, MVC, CQRS, or any other pattern. Adopt them when complexity and requirements justify it, or when the project already uses them coherently.
+- Do not put business rules in an inappropriate place (handler, UI component, query) just to reduce the number of files.
+- Recognize when a module needs to grow, be split, or be reorganized: multiple independent reasons for change, tests that require setting up unrelated context, changes that always touch the same distant points.
+- Consider the cost of change: prefer structures that make the next likely change local and cheap.
 
-Separação proporcional — regra pura isolada do I/O, sem camadas adicionais:
+Proportional separation: pure rule isolated from I/O, with no additional layers:
 
 ```typescript
 type Order = { id: string; totalCents: number };
@@ -26,21 +26,21 @@ type OrderStore = {
   save(order: Order): Promise<void>;
 };
 
-// Regra de negócio: sem I/O, testável sem infraestrutura.
+// Business rule: no I/O, testable without infrastructure.
 export function applyDiscount(totalCents: number, percent: number): number {
   if (percent < 0 || percent > 100) {
-    throw new RangeError("O desconto deve estar entre 0 e 100.");
+    throw new RangeError("The discount must be between 0 and 100.");
   }
 
   return Math.round(totalCents * (1 - percent / 100));
 }
 
-// Orquestração: os efeitos colaterais ficam explícitos e na fronteira.
+// Orchestration: side effects stay explicit and at the boundary.
 export async function applyCoupon(orderId: string, percent: number, orders: OrderStore): Promise<Order> {
   const order = await orders.findById(orderId);
 
   if (!order) {
-    throw new Error(`Pedido ${orderId} não encontrado.`);
+    throw new Error(`Order ${orderId} not found.`);
   }
 
   const updated = { ...order, totalCents: applyDiscount(order.totalCents, percent) };
@@ -53,34 +53,34 @@ export async function applyCoupon(orderId: string, percent: number, orders: Orde
 
 ### 7.1 Monorepos
 
-Sem presumir ferramenta de workspace ou de orquestração.
+Do not presume a workspace or orchestration tool.
 
-- Separar aplicações (unidades implantáveis) de pacotes (código reutilizável). Aplicações não importam umas das outras.
-- Cada pacote expõe uma API pública explícita. Não importar caminhos internos de outro pacote.
-- Declarar as dependências de cada pacote no próprio manifesto. Não depender de pacotes disponíveis por acidente na raiz.
-- Manter o grafo de dependências acíclico e em uma direção: aplicações dependem de pacotes, nunca o inverso.
-- Compartilhar schemas, tipos e lógica de domínio quando houver mais de um consumidor real e um único dono do contrato. Um contrato compartilhado é uma API: alterá-lo afeta todos os consumidores.
-- Não criar pacote compartilhado artificial nem pacotes genéricos que acoplam aplicações sem relação.
-- Executar build, testes e verificações do pacote alterado **e** dos pacotes que dependem dele, quando o projeto permitir.
-- Preservar o isolamento: configuração, segredos e código específico de runtime de uma aplicação não vazam para pacotes compartilhados.
+- Separate applications (deployable units) from packages (reusable code). Applications do not import each other.
+- Each package exposes an explicit public API. Do not import internal paths of another package.
+- Declare each package's dependencies in its own manifest. Do not depend on packages that are available by accident at the root.
+- Keep the dependency graph acyclic and unidirectional: applications depend on packages, never the reverse.
+- Share schemas, types, and domain logic when there is more than one real consumer and a single owner of the contract. A shared contract is an API: changing it affects all consumers.
+- Do not create an artificial shared package or generic packages that couple unrelated applications.
+- Run build, tests, and checks for the changed package **and** for the packages that depend on it, when the project allows.
+- Preserve isolation: configuration, secrets, and runtime-specific code of one application do not leak into shared packages.
 
-## 8. Nomenclatura e organização de arquivos
+## 8. Naming and file organization
 
-### 8.1 Nomes
+### 8.1 Names
 
-Padrão geral, subordinado às convenções existentes do projeto e às exigências do framework em uso:
+General standard, subordinate to the project's existing conventions and to the requirements of the framework in use:
 
-- `kebab-case` para arquivos e diretórios.
-- `camelCase` para variáveis e funções.
-- `PascalCase` para classes, tipos e interfaces.
-- Nomes que expressem a responsabilidade. Evitar abreviações obscuras e nomes genéricos (`data`, `info`, `manager`, `handler2`).
-- Extensões e convenções coerentes com o restante do projeto.
+- `kebab-case` for files and directories.
+- `camelCase` for variables and functions.
+- `PascalCase` for classes, types, and interfaces.
+- Names that express responsibility. Avoid obscure abbreviations and generic names (`data`, `info`, `manager`, `handler2`).
+- Extensions and conventions consistent with the rest of the project.
 
-### 8.2 Sem redundância contextual
+### 8.2 No contextual redundancy
 
-Quando o diretório já estabelece o domínio, não repetir o domínio no nome do arquivo.
+When the directory already establishes the domain, do not repeat the domain in the file name.
 
-Preferir:
+Prefer:
 
 ```text
 users/
@@ -94,7 +94,7 @@ users/
     └── schema.test.ts
 ```
 
-Evitar como padrão:
+Avoid by default:
 
 ```text
 users/
@@ -104,43 +104,43 @@ users/
 └── users.types.ts
 ```
 
-A árvore acima ilustra a nomenclatura, não um conjunto obrigatório de arquivos (8.4).
+The tree above illustrates naming, not a mandatory set of files (8.4).
 
-### 8.3 Testes
+### 8.3 Tests
 
-- Preferir um diretório `tests/` dentro do módulo, agrupando os testes daquele módulo.
-- Nomear cada teste pelo módulo, função ou comportamento testado.
-- Manter fixtures e helpers próximos dos testes que os usam. Compartilhar somente com reutilização concreta.
-- Verificar a configuração de descoberta de testes antes de criar, mover ou renomear arquivos de teste.
-- Respeitar a convenção existente quando for funcional e consistente. Não migrar a organização de testes sem pedido.
+- Prefer a `tests/` directory inside the module, grouping that module's tests.
+- Name each test after the module, function, or behavior tested.
+- Keep fixtures and helpers close to the tests that use them. Share only with concrete reuse.
+- Check the test discovery configuration before creating, moving, or renaming test files.
+- Respect the existing convention when it is functional and consistent. Do not migrate the test organization without a request.
 
-### 8.4 Sem proliferação de arquivos
+### 8.4 No file proliferation
 
-Não criar automaticamente:
+Do not create automatically:
 
-- `types.ts` em todo diretório.
-- `constants.ts` para uma única constante.
-- `utils.ts`, `helpers.ts` ou `common.ts` como depósito de funções sem relação.
-- `index.ts` em todo módulo, sem necessidade de API pública explícita.
-- Um arquivo por função ou declaração.
-- Camadas e arquivos vazios para cumprir uma estrutura teórica.
+- `types.ts` in every directory.
+- `constants.ts` for a single constant.
+- `utils.ts`, `helpers.ts`, or `common.ts` as a dumping ground for unrelated functions.
+- `index.ts` in every module, with no need for an explicit public API.
+- One file per function or declaration.
+- Empty layers and files to fulfill a theoretical structure.
 
-Separar arquivos por coesão, responsabilidade, testabilidade, legibilidade ou limite de dependência — nunca por hábito.
+Split files by cohesion, responsibility, testability, readability, or dependency boundary — never by habit.
 
-## 9. Formatação e legibilidade visual
+## 9. Formatting and visual readability
 
-Legibilidade é prioridade explícita. Não comprimir código para reduzir linhas; não fragmentá-lo com espaçamento excessivo.
+Readability is an explicit priority. Do not compress code to reduce lines; do not fragment it with excessive spacing.
 
-- Seguir o formatador configurado no projeto. Não reformatar código fora do escopo.
-- Manter juntas, uma por linha e sem linha em branco entre elas, as declarações diretamente relacionadas.
-- Usar uma linha em branco entre blocos lógicos distintos: declarações, condicionais, loops, funções e operações que representam etapas diferentes.
-- Não colocar um `if` independente colado à declaração anterior quando forem etapas distintas.
-- Não comprimir função, condicional, retorno ou declarações diferentes em uma única linha.
-- Usar múltiplas linhas para objetos, arrays, chamadas e condições complexas quando facilitar a leitura.
-- Não inserir linhas em branco dentro de uma mesma operação coesa.
-- Preferir retorno antecipado quando reduzir aninhamento.
+- Follow the formatter configured in the project. Do not reformat code outside the scope.
+- Keep directly related declarations together, one per line, with no blank line between them.
+- Use one blank line between distinct logical blocks: declarations, conditionals, loops, functions, and operations that represent different steps.
+- Do not place an independent `if` glued to the previous declaration when they are distinct steps.
+- Do not compress a function, conditional, return, or different declarations into a single line.
+- Use multiple lines for objects, arrays, calls, and complex conditions when it makes reading easier.
+- Do not insert blank lines inside a single cohesive operation.
+- Prefer early return when it reduces nesting.
 
-Incorreto:
+Incorrect:
 
 ```typescript
 type User = { id: string; name: string; active: boolean };
@@ -152,7 +152,7 @@ function listActiveUsers(users: readonly User[]) {
 }
 ```
 
-Correto:
+Correct:
 
 ```typescript
 type User = { id: string; name: string; active: boolean };
@@ -171,16 +171,16 @@ function listActiveUsers(users: readonly User[]) {
 }
 ```
 
-Formatadores automáticos não impõem todas essas regras de espaçamento entre declarações. Usar a configuração automática para o que ela cobre e a revisão do diff para o restante.
+Automatic formatters do not enforce all of these spacing rules between declarations. Use the automatic configuration for what it covers and diff review for the rest.
 
-## 10. Comentários e documentação
+## 10. Comments and documentation
 
-- Escrever comentários curtos, diretos e úteis.
-- Comentar intenção, restrições, decisões não óbvias, invariantes e efeitos colaterais.
-- Não comentar o óbvio nem repetir em palavras o que o código já expressa.
-- Atualizar ou remover comentários que a alteração tornou incorretos.
-- Não deixar código comentado nem marcadores de pendência sem contexto.
-- Documentar APIs públicas, contratos e comportamentos relevantes quando necessário. Não criar documentação extensa para funções triviais.
-- Registrar decisões arquiteturais significativas em ADR quando o contexto justificar e o projeto adotar a prática.
-- Não criar documentação que duplique o código ou as instruções centrais.
+- Write short, direct, useful comments.
+- Comment intent, constraints, non-obvious decisions, invariants, and side effects.
+- Do not comment the obvious or restate in words what the code already expresses.
+- Update or remove comments that the change made incorrect.
+- Do not leave commented-out code or pending-work markers without context.
+- Document public APIs, contracts, and relevant behaviors when necessary. Do not create extensive documentation for trivial functions.
+- Record significant architectural decisions in an ADR when the context justifies it and the project adopts the practice.
+- Do not create documentation that duplicates the code or the core instructions.
 

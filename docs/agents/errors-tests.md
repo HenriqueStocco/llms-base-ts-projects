@@ -1,22 +1,22 @@
-# Erros e testes
+# Errors and tests
 
-Detalhe das seções 11 e 12 de `AGENTS.md`, com exemplos e procedimentos. Não contradiz o núcleo; em caso de divergência, vale o núcleo. A numeração original foi mantida.
+Detail for sections 11 and 12 of `AGENTS.md`, with examples and procedures. It does not contradict the core; on divergence, the core prevails. The original numbering is kept.
 
-## 11. Tratamento de erros e validações
+## 11. Error handling and validation
 
-- Validar entradas externas na fronteira apropriada (5.1). Depois de validado, confiar no tipo; não revalidar o mesmo dado em cada camada sem propósito.
-- Distinguir, quando a distinção for útil ao consumidor: erro esperado (entrada inválida, recurso inexistente), erro de domínio (regra violada), erro de infraestrutura (dependência indisponível) e falha inesperada (defeito).
-- Proibido `catch` vazio e tratamento silencioso.
-- Preservar contexto ao propagar: mensagem com o que estava sendo feito e a causa original.
-- Não converter falha em resultado de sucesso falso.
-- Não usar fallback ou valor padrão que esconda inconsistência de dados.
-- Escrever mensagens úteis para quem as recebe, sem expor detalhes internos, segredos ou dados sensíveis.
-- Não confundir validação de formato com autorização ou regra de negócio.
-- Usar a biblioteca de schemas já adotada no projeto, quando apropriada. Não introduzir uma segunda.
-- Tratar datas, fusos, números, moeda, identificadores e formatos de forma consistente com os contratos existentes.
-- A estratégia é proporcional: não exigir hierarquia de classes de erro em todo projeto.
+- Validate external input at the appropriate boundary (5.1). Once validated, trust the type; do not revalidate the same data in every layer without purpose.
+- Distinguish, when the distinction is useful to the consumer: expected error (invalid input, nonexistent resource), domain error (violated rule), infrastructure error (unavailable dependency), and unexpected failure (defect).
+- Empty `catch` and silent handling are forbidden.
+- Preserve context when propagating: a message with what was being done and the original cause.
+- Do not convert a failure into a false success result.
+- Do not use a fallback or default value that hides data inconsistency.
+- Write messages that are useful to whoever receives them, without exposing internal details, secrets, or sensitive data.
+- Do not confuse format validation with authorization or business rules.
+- Use the schema library already adopted in the project, when appropriate. Do not introduce a second one.
+- Handle dates, time zones, numbers, currency, identifiers, and formats consistently with the existing contracts.
+- The strategy is proportional: do not require an error class hierarchy in every project.
 
-Incorreto — a falha desaparece e o chamador recebe um "sucesso" indistinguível de perfil inexistente:
+Incorrect — the failure disappears and the caller receives a "success" indistinguishable from a nonexistent profile:
 
 ```typescript
 type Profile = { id: string; name: string };
@@ -30,7 +30,7 @@ async function loadProfile(id: string, fetchProfile: (id: string) => Promise<Pro
 }
 ```
 
-Correto — a falha é propagada com contexto e causa preservados:
+Correct — the failure is propagated with context and cause preserved:
 
 ```typescript
 type Profile = { id: string; name: string };
@@ -39,12 +39,12 @@ async function loadProfile(id: string, fetchProfile: (id: string) => Promise<Pro
   try {
     return await fetchProfile(id);
   } catch (error) {
-    throw new Error(`Falha ao carregar o perfil ${id}.`, { cause: error });
+    throw new Error(`Failed to load profile ${id}.`, { cause: error });
   }
 }
 ```
 
-Erro esperado como parte do contrato — o chamador é obrigado a tratar cada caso:
+Expected error as part of the contract — the caller is required to handle each case:
 
 ```typescript
 type QuantityError = "empty" | "not-an-integer" | "out-of-range";
@@ -72,80 +72,80 @@ export function parseQuantity(raw: string): QuantityResult {
 }
 ```
 
-Exceção e resultado tipado são ambos válidos. Seguir o estilo predominante do projeto e não misturar os dois no mesmo módulo sem motivo.
+Exception and typed result are both valid. Follow the project's predominant style and do not mix the two in the same module without reason.
 
-## 12. Estratégia de testes
+## 12. Testing strategy
 
-### 12.1 Seleção por risco e fronteira
+### 12.1 Selection by risk and boundary
 
-| Tipo | Usar para |
+| Type | Use for |
 | --- | --- |
-| Unitário | Regras de negócio, transformações, invariantes, casos extremos. |
-| Integração | Interação real entre módulos, persistência e dependências relevantes. |
-| Contrato | Compatibilidade entre produtores, consumidores e formatos. |
-| E2E | Fluxos críticos completos e comportamento observável. |
-| Regressão | Reprodução de defeito corrigido. |
-| Propriedades / mutação | Quando o benefício for proporcional (parsers, cálculos, invariantes amplos). |
+| Unit | Business rules, transformations, invariants, edge cases. |
+| Integration | Real interaction between modules, persistence, and relevant dependencies. |
+| Contract | Compatibility between producers, consumers, and formats. |
+| E2E | Complete critical flows and observable behavior. |
+| Regression | Reproduction of a fixed defect. |
+| Property / mutation | When the benefit is proportional (parsers, calculations, broad invariants). |
 
-Não exigir todos os tipos em toda alteração. Escolher o nível mais baixo que realmente exercita o risco.
+Do not require all types in every change. Choose the lowest level that actually exercises the risk.
 
-### 12.2 Cenários a avaliar
+### 12.2 Scenarios to evaluate
 
-Conforme a funcionalidade:
+According to the functionality:
 
-- Caminhos válidos.
-- Entradas ausentes, malformadas ou inválidas.
-- Valores-limite e coleções vazias.
-- Estados inválidos e transições não permitidas.
-- Falha de dependência, timeout e indisponibilidade.
-- Autenticação e autorização, incluindo acesso a recurso de outro usuário ou organização.
-- Concorrência, duplicidade e repetição de requisições.
-- Atomicidade, rollback e efeitos colaterais.
-- Compatibilidade e regressões.
-- Falhas parciais e recuperação.
+- Valid paths.
+- Missing, malformed, or invalid inputs.
+- Boundary values and empty collections.
+- Invalid states and disallowed transitions.
+- Dependency failure, timeout, and unavailability.
+- Authentication and authorization, including access to another user's or organization's resource.
+- Concurrency, duplication, and request repetition.
+- Atomicity, rollback, and side effects.
+- Compatibility and regressions.
+- Partial failures and recovery.
 
-### 12.3 Qualidade
+### 12.3 Quality
 
-- Testar resultados observáveis e invariantes, não detalhes internos.
-- Não escrever teste que apenas espelha a implementação atual sem verificar o contrato.
-- Não usar mock para substituir justamente a interação que o teste deveria validar.
-- Evitar mocks em excesso e testes frágeis, acoplados à estrutura interna.
-- Cobertura de linhas não é indicador suficiente de qualidade.
-- Preferir testes determinísticos: controlar relógio, aleatoriedade, ordem e rede.
-- Criar teste de regressão para defeito relevante corrigido. Quando viável, confirmar que ele falha sem a correção.
+- Test observable results and invariants, not internal details.
+- Do not write a test that merely mirrors the current implementation without verifying the contract.
+- Do not use a mock to replace precisely the interaction the test is supposed to validate.
+- Avoid excessive mocks and brittle tests coupled to the internal structure.
+- Line coverage is not a sufficient indicator of quality.
+- Prefer deterministic tests: control clock, randomness, order, and network.
+- Create a regression test for a relevant fixed defect. When feasible, confirm that it fails without the fix.
 
-Proibido:
+Forbidden:
 
-- Remover assertions, enfraquecer ou desativar testes para obter aprovação.
-- Alterar a expectativa de um teste apenas porque a implementação falhou. Mudar a expectativa exige que o contrato tenha mudado de fato.
-- Declarar testes aprovados sem tê-los executado.
+- Removing assertions, weakening or disabling tests to get them to pass.
+- Changing a test's expectation just because the implementation failed. Changing the expectation requires that the contract actually changed.
+- Declaring tests passed without having run them.
 
-Se o ambiente impedir a execução de algum teste, reportar a limitação e o que ficou sem verificação.
+If the environment prevents running some test, report the limitation and what remained unverified.
 
-Exemplo — limites e cenários negativos de `parseQuantity` (seção 11). `describe`, `it` e `expect` vêm do runner de testes do projeto:
+Example — boundaries and negative scenarios of `parseQuantity` (section 11). `describe`, `it`, and `expect` come from the project's test runner:
 
 ```typescript
 describe("parseQuantity", () => {
-  it("aceita os dois limites do intervalo", () => {
+  it("accepts both limits of the range", () => {
     expect(parseQuantity("1")).toEqual({ ok: true, value: 1 });
     expect(parseQuantity("100")).toEqual({ ok: true, value: 100 });
   });
 
-  it("rejeita valores imediatamente fora do intervalo", () => {
+  it("rejects values immediately outside the range", () => {
     expect(parseQuantity("0")).toEqual({ ok: false, error: "out-of-range" });
     expect(parseQuantity("101")).toEqual({ ok: false, error: "out-of-range" });
   });
 
-  it("rejeita entrada vazia ou composta apenas de espaços", () => {
+  it("rejects empty input or input made only of spaces", () => {
     expect(parseQuantity("")).toEqual({ ok: false, error: "empty" });
     expect(parseQuantity("   ")).toEqual({ ok: false, error: "empty" });
   });
 
-  it("rejeita o que não é inteiro sem sinal", () => {
+  it("rejects anything that is not an unsigned integer", () => {
     expect(parseQuantity("1.5")).toEqual({ ok: false, error: "not-an-integer" });
     expect(parseQuantity("-1")).toEqual({ ok: false, error: "not-an-integer" });
     expect(parseQuantity("1e2")).toEqual({ ok: false, error: "not-an-integer" });
-    expect(parseQuantity("dez")).toEqual({ ok: false, error: "not-an-integer" });
+    expect(parseQuantity("ten")).toEqual({ ok: false, error: "not-an-integer" });
   });
 });
 ```

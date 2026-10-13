@@ -1,56 +1,56 @@
-# Claude Code: permissões, hooks, modelos e subagentes
+# Claude Code: permissions, hooks, models, and subagents
 
-Complementa `AGENTS.md` (matriz de risco em 16.2) e `CLAUDE.md`. Descreve **o que a máquina impõe**, o que depende só de comportamento, o que cada papel pode fazer e como alterar as proteções. Itens marcados **(proposto)** estão em `proposals/claude/` e só valem depois de aplicados (seção 5).
+Complements `AGENTS.md` (risk matrix in 16.2) and `CLAUDE.md`. Describes **what the machine enforces**, what depends only on behavior, what each role may do, and how to change the protections. Items marked **(proposed)** are in `proposals/claude/` and only take effect once applied (section 5).
 
-## 1. O que é imposto e o que é só comportamental
+## 1. What is enforced and what is only behavioral
 
-| Camada | Onde | O que faz | Limite conhecido |
+| Layer | Where | What it does | Known limit |
 | --- | --- | --- | --- |
-| Regras de permissão | `.claude/settings.json` → `permissions` | `deny` bloqueia, `ask` pede confirmação, `allow` libera. Ordem: deny, ask, allow. Hook não anula `deny` nem `ask`. | Regras de `Bash` casam o **texto** do comando. `/usr/bin/git push`, `git -C . push`, `git 'push'` e `bash -c '...'` escapam. `Read` deny cobre as ferramentas de arquivo e comandos como `cat`/`sed`/redirecionamento, mas não um script (`python`, `node`) que abre o arquivo sozinho. |
-| Hook `PreToolUse` | `.claude/hooks/guard-paths.sh` | Aplica `.claudeignore`; bloqueia leitura de arquivo grande sem `limit`; bloqueia segredo em conteúdo gravado; **(proposto)** bloqueia `git` destrutivo em qualquer forma e pede confirmação para `git -C`/`-c`/`--git-dir`. Vale também dentro de subagentes. | Verificação por tokens, best effort: expansão de variável, glob e script externo escapam. Pode dar falso positivo (ex.: o filtro `.key` de um `jq` casa com `*.key`). Por padrão, **hook que falha deixa a ação passar**; **(proposto)** `onFailure: "block"`. |
-| `.claudeignore` | raiz | Lista de caminhos sensíveis, lida pelo hook. Reduz contexto. | Não é barreira de segurança. Duplica o `Read(...)` de `deny`: ao editar um, editar o outro. |
-| Sandbox | `/sandbox` (**desligado hoje**) | Único mecanismo que bloqueia, no sistema operacional, o que um subprocesso lê, escreve e acessa de rede. | Cobre só comandos de shell; as ferramentas de arquivo seguem as regras de permissão. Linux precisa de `bubblewrap` e `socat`; no Ubuntu 24.04+ o AppArmor exige ajuste. |
-| `AGENTS.md`, `CLAUDE.md` | raiz | Orientam o julgamento. | **Comportamental**: o modelo pode errar ou ignorar. Para bloquear de verdade, regra de permissão ou hook. |
+| Permission rules | `.claude/settings.json` → `permissions` | `deny` blocks, `ask` requests confirmation, `allow` permits. Order: deny, ask, allow. A hook does not override `deny` or `ask`. | `Bash` rules match the command **text**. `/usr/bin/git push`, `git -C . push`, `git 'push'`, and `bash -c '...'` get past them. `Read` deny covers the file tools and commands such as `cat`/`sed`/redirection, but not a script (`python`, `node`) that opens the file itself. |
+| `PreToolUse` hook | `.claude/hooks/guard-paths.sh` | Applies `.claudeignore`; blocks reading a large file without `limit`; blocks secrets in written content; **(proposed)** blocks destructive `git` in any form and asks for confirmation on `git -C`/`-c`/`--git-dir`. Also applies inside subagents. | Token-based check, best effort: variable expansion, glob, and external script get past it. May produce false positives (e.g., the `.key` filter of a `jq` matches `*.key`). By default, a **hook that fails lets the action through**; **(proposed)** `onFailure: "block"`. |
+| `.claudeignore` | root | List of sensitive paths, read by the hook. Reduces context. | Not a security barrier. Duplicates the `Read(...)` in `deny`: when editing one, edit the other. |
+| Sandbox | `/sandbox` (**off today**) | The only mechanism that blocks, at the operating system level, what a subprocess reads, writes, and accesses over the network. | Covers only shell commands; the file tools follow the permission rules. Linux needs `bubblewrap` and `socat`; on Ubuntu 24.04+ AppArmor requires adjustment. |
+| `AGENTS.md`, `CLAUDE.md` | root | Guide judgment. | **Behavioral**: the model may err or ignore them. To really block, use a permission rule or a hook. |
 
-## 2. Matriz de risco (16.2) → configuração
+## 2. Risk matrix (16.2) → configuration
 
-| Nível | Configuração | Quem decide |
+| Level | Configuration | Who decides |
 | --- | --- | --- |
-| **A** inspeção local | `allow` explícito para `git status/diff/log/show`, `git worktree list`; leitura dentro do projeto; testes, lint e typecheck do projeto | automático |
-| **B** alteração local reversível | edição dentro do projeto, **exceto** `.claude/**`, `.claudeignore` e settings do usuário (`deny`) | modo de permissão da sessão |
-| **C** impacto operacional | `ask`: commit e demais comandos que mudam o Git, instalação de dependências, `publish`/`deploy`, `ssh`/`scp`/`rsync`, `curl`/`wget`, `sudo`, `docker compose`/`run`/`build`/`rm`, clientes de banco, `rm -r`, `chmod -R` | usuário confirma cada vez |
-| **D** crítica ou destrutiva | `deny` quando é irreversível e raro: `push --force`/`--delete`/`+refspec`, `reset --hard`, `clean`, `stash drop`/`clear`, `docker system prune`, `docker volume rm`/`prune`. O usuário executa, se quiser, com `!` | só o usuário, por operação |
+| **A** local inspection | explicit `allow` for `git status/diff/log/show`, `git worktree list`; reading inside the project; the project's tests, lint, and typecheck | automatic |
+| **B** reversible local change | editing inside the project, **except** `.claude/**`, `.claudeignore`, and user settings (`deny`) | the session's permission mode |
+| **C** operational impact | `ask`: commit and other commands that change Git, dependency installation, `publish`/`deploy`, `ssh`/`scp`/`rsync`, `curl`/`wget`, `sudo`, `docker compose`/`run`/`build`/`rm`, database clients, `rm -r`, `chmod -R` | user confirms each time |
+| **D** critical or destructive | `deny` when irreversible and rare: `push --force`/`--delete`/`+refspec`, `reset --hard`, `clean`, `stash drop`/`clear`, `docker system prune`, `docker volume rm`/`prune`. The user runs it, if they want, with `!` | user only, per operation |
 
-Critério: **`deny` para o que não se desfaz e quase nunca o agente precisa fazer; `ask` para o que é legítimo mas compartilhado.** `ask` e `deny` não dependem do modelo.
+Criterion: **`deny` for what cannot be undone and the agent almost never needs to do; `ask` for what is legitimate but shared.** `ask` and `deny` do not depend on the model.
 
-## 3. O que cada papel pode e não pode
+## 3. What each role may and may not do
 
-Vale para **todos** os papéis e modelos: permissões e hooks são herdados pelos subagentes; modelo menor **não** ganha permissão extra; ninguém altera as proteções (`.claude/**`, `.claudeignore`, settings do usuário) nem troca o modelo da sessão (isso é do usuário: `claude --model`, `--effort`, `/model`).
+Applies to **all** roles and models: permissions and hooks are inherited by subagents; a smaller model does **not** gain extra permission; no one changes the protections (`.claude/**`, `.claudeignore`, user settings) or switches the session model (that is up to the user: `claude --model`, `--effort`, `/model`).
 
-| Papel | Modelo e esforço | Pode | Não pode |
+| Role | Model and effort | May | May not |
 | --- | --- | --- | --- |
-| Entrevista e criação da change | Opus 5.5, `medium` (`high` só em decisão ambígua ou crítica) | Ler o repositório, escrever a change, propor mudanças de configuração em `proposals/` | Alterar proteções; nível C/D sem autorização |
-| Implementação e correções | Sonnet 5.5, `medium`; `low` em ajuste simples. Escalar para Opus após 2 tentativas sem sucesso, em sessão nova | Editar código e testes, rodar verificações locais (A e B) | Commit, push, instalar, migrar, deploy sem autorização |
-| Subagente de leitura | Haiku 5.5. `tools: Read, Grep, Glob` | Buscar, ler, resumir | Editar, executar comandos, commit |
-| Subagente executor de testes | Haiku 5.5. `tools: Read, Grep, Glob, Bash` | Rodar testes, lint e typecheck e devolver só as falhas | Editar arquivos |
-| Revisor (`/code-review`) | Opus, contexto limpo | Ler o diff e reportar achados | Aplicar correções sem pedido |
+| Interview and creation of the change | Opus 5.5, `medium` (`high` only for an ambiguous or critical decision) | Read the repository, write the change, propose configuration changes in `proposals/` | Change protections; Level C/D without authorization |
+| Implementation and fixes | Sonnet 5.5, `medium`; `low` for a simple adjustment. Escalate to Opus after 2 unsuccessful attempts, in a new session | Edit code and tests, run local checks (A and B) | Commit, push, install, migrate, deploy without authorization |
+| Reading subagent | Haiku 5.5. `tools: Read, Grep, Glob` | Search, read, summarize | Edit, run commands, commit |
+| Test-runner subagent | Haiku 5.5. `tools: Read, Grep, Glob, Bash` | Run tests, lint, and typecheck and return only the failures | Edit files |
+| Reviewer (`/code-review`) | Opus, clean context | Read the diff and report findings | Apply fixes without a request |
 
-Regras de uso:
-- Escolher modelo e esforço **ao abrir a sessão**. Trocar de modelo no meio invalida o cache da conversa inteira.
-- `opusplan` não serve ao fluxo OpenSpec: o plan mode não grava arquivos, e cada alternância troca de modelo.
-- Quem decide o modelo de um subagente: o parâmetro da chamada, depois o `model` do arquivo `.claude/agents/*.md`, depois `CLAUDE_CODE_SUBAGENT_MODEL`, depois o modelo da sessão. Para forçar todos: `CLAUDE_CODE_SUBAGENT_MODEL` com `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`.
-- Regra em `CLAUDE.md` **influencia**, mas não garante a delegação. O que dirige o roteamento é o campo `description` do subagente. O `Explore` embutido herda o modelo da sessão; um subagente customizado chamado `Explore` com `model: haiku` o substitui.
-- Skill com `model:` no frontmatter troca o modelo só durante aquele turno e volta no prompt seguinte.
+Usage rules:
+- Choose model and effort **when opening the session**. Switching models midway invalidates the cache of the entire conversation.
+- `opusplan` does not fit the OpenSpec workflow: plan mode does not write files, and each toggle switches the model.
+- What decides a subagent's model, in order: the call parameter, then the `model` in the `.claude/agents/*.md` file, then `CLAUDE_CODE_SUBAGENT_MODEL`, then the session model. To force all of them: `CLAUDE_CODE_SUBAGENT_MODEL` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`.
+- A rule in `CLAUDE.md` **influences** delegation but does not guarantee it. What drives routing is the subagent's `description` field. The built-in `Explore` inherits the session model; a custom subagent named `Explore` with `model: haiku` replaces it.
+- A skill with `model:` in the frontmatter switches the model only during that turn and reverts on the next prompt.
 
-## 4. Limites que continuam abertos
+## 4. Limits that remain open
 
-1. **Subprocessos** (`python`, `node`) podem ler o que o `Read` deny e o hook não enxergam. Só o **sandbox** fecha isso.
-2. **Grep/Glob** sem `path` varrem o diretório atual; o hook só vê o `path` informado. Fora de um repositório Git, o `ripgrep` pode não aplicar o `.gitignore` (não verificado).
-3. **MCP e `WebFetch`** não passam pelo hook de arquivos. Controlar por regras de permissão (`mcp__servidor__ferramenta`, `WebFetch(domain:...)`).
-4. **Prefixos de comando** (`env`, `command`, `time`) são tratados pelo hook de `git`, mas outros wrappers não.
-5. Sem `onFailure: "block"`, hook que não inicia, estoura o tempo ou falha **deixa a ação passar**. Exige Claude Code 2.1.295 ou superior.
+1. **Subprocesses** (`python`, `node`) can read what the `Read` deny and the hook do not see. Only the **sandbox** closes this.
+2. **Grep/Glob** without `path` scan the current directory; the hook only sees the `path` provided. Outside a Git repository, `ripgrep` may not apply `.gitignore` (not verified).
+3. **MCP and `WebFetch`** do not go through the file hook. Control them with permission rules (`mcp__server__tool`, `WebFetch(domain:...)`).
+4. **Command prefixes** (`env`, `command`, `time`) are handled by the `git` hook, but other wrappers are not.
+5. Without `onFailure: "block"`, a hook that fails to start, times out, or fails **lets the action through**. Requires Claude Code 2.1.295 or later.
 
-Se quiser fechar o item 1, ligar o sandbox (verificar o resultado em `/sandbox`, aba Config):
+To close item 1, turn on the sandbox (verify the result in `/sandbox`, Config tab):
 
 ```json
 {
@@ -63,11 +63,11 @@ Se quiser fechar o item 1, ligar o sandbox (verificar o resultado em `/sandbox`,
 }
 ```
 
-Instalar `bubblewrap` e `socat` (pacotes de mesmo nome em Ubuntu e Arch). Com `allowUnsandboxedCommands: false`, o comando que falha no sandbox não tenta de novo fora dele.
+Install `bubblewrap` and `socat` (packages of the same name on Ubuntu and Arch). With `allowUnsandboxedCommands: false`, a command that fails in the sandbox does not retry outside it.
 
-## 5. Como alterar as proteções
+## 5. How to change the protections
 
-O agente **não** edita `.claude/**`, `.claudeignore` nem settings do usuário (`deny`), e não contorna isso por Bash. Quando uma proteção precisar mudar, o agente escreve a proposta em `proposals/claude/` e o usuário aplica:
+The agent does **not** edit `.claude/**`, `.claudeignore`, or user settings (`deny`), and does not work around this through Bash. When a protection needs to change, the agent writes the proposal in `proposals/claude/` and the user applies it:
 
 ```bash
 cp proposals/claude/settings.json .claude/settings.json
@@ -76,4 +76,4 @@ cp proposals/claude/claudeignore .claudeignore
 bash .claude/hooks/test-guard.sh
 ```
 
-Depois, `jq empty .claude/settings.json`, `/hooks` e `/permissions` para conferir, e remover `proposals/`.
+Then use `jq empty .claude/settings.json`, `/hooks`, and `/permissions` to check, and remove `proposals/`.

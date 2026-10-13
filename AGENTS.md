@@ -48,6 +48,11 @@ If the task touches one of these topics, read the file **before acting**. The co
 - Do not declare done without section 19.
 - Classify every command by the matrix (16.2). The task authorizes the necessary local work; it does **not** authorize commit, publishing, deploy, migration, or destructive operations.
 
+**2.1 Specs and changes.**
+- OpenSpec is the default for specs, proposals, designs, tasks, and changes in every project. Do not create parallel spec formats or ad-hoc planning documents.
+- If the project has no `openspec/` directory, say so and ask before initializing it (initializing is its own task, 15.2).
+- Every artifact generated through OpenSpec follows 18.5.
+
 ## 3. Requirements and questions
 
 - Investigate before asking: code, contracts, configuration, and environment variable **names** (no values), tests, existing validations and permissions.
@@ -223,6 +228,12 @@ Direct, short answer, maximum information per line. No generic introduction, no 
 - **18.2 After:** omitting what is empty, **Implemented**, **Files**, **Impact**, **Validation** (real results, including failures), **Open items** (risks, limitations, assumptions). Trivial change: one or two sentences.
 - **18.3 Problem:** symptom; cause or marked hypothesis (4.2); impact; recommended main solution; how to verify. Alternatives only with a material trade-off.
 - **18.4 Fidelity:** the report reflects what was done. Say what was not run, what failed, and what was not verified. A hypothesis is not a fact; partial work is not done.
+- **18.5 Language.**
+  - **Conversation with the user** (questions, plans, explanations, reports in the prompt): Brazilian Portuguese (pt-BR).
+  - **Everything generated and persisted for development** is US English (en-US): OpenSpec artifacts (proposals, specs, designs, tasks), documentation, code comments, commit messages, PR descriptions, identifiers, and log and error messages in code.
+  - **Language of the systems and applications** (UI strings, emails, notifications, and any message shown to end users) is always Brazilian Portuguese (pt-BR), because the users are Brazilian. Development language and product language are independent: do not translate product text to English.
+  - Content the user gave in Portuguese that goes into development artifacts is translated, not copied. A domain term with no English equivalent (e.g., Pix, CPF) stays in the original, with a short gloss on first use.
+  - After generating or changing an artifact, summarize it in pt-BR in the conversation so the user can review and decide.
 
 ## 19. Completion criteria
 

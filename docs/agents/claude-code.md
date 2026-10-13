@@ -1,13 +1,13 @@
 # Claude Code: permissions, hooks, models, and subagents
 
-Complements `AGENTS.md` (risk matrix in 16.2) and `CLAUDE.md`. Describes **what the machine enforces**, what depends only on behavior, what each role may do, and how to change the protections. Items marked **(proposed)** are in `proposals/claude/` and only take effect once applied (section 5).
+Complements `AGENTS.md` (risk matrix in 16.2) and `CLAUDE.md`. Describes **what the machine enforces**, what depends only on behavior, what each role may do, and how to change the protections. No change is pending in `proposals/claude/`; a new proposal only takes effect once applied (section 5).
 
 ## 1. What is enforced and what is only behavioral
 
 | Layer | Where | What it does | Known limit |
 | --- | --- | --- | --- |
 | Permission rules | `.claude/settings.json` → `permissions` | `deny` blocks, `ask` requests confirmation, `allow` permits. Order: deny, ask, allow. A hook does not override `deny` or `ask`. | `Bash` rules match the command **text**. `/usr/bin/git push`, `git -C . push`, `git 'push'`, and `bash -c '...'` get past them. `Read` deny covers the file tools and commands such as `cat`/`sed`/redirection, but not a script (`python`, `node`) that opens the file itself. |
-| `PreToolUse` hook | `.claude/hooks/guard-paths.sh` | Applies `.claudeignore`; blocks reading a large file without `limit`; blocks secrets in written content; **(proposed)** blocks destructive `git` in any form and asks for confirmation on `git -C`/`-c`/`--git-dir`. Also applies inside subagents. | Token-based check, best effort: variable expansion, glob, and external script get past it. May produce false positives (e.g., the `.key` filter of a `jq` matches `*.key`). By default, a **hook that fails lets the action through**; **(proposed)** `onFailure: "block"`. |
+| `PreToolUse` hook | `.claude/hooks/guard-paths.sh` | Applies `.claudeignore`; blocks reading a large file without `limit`; blocks secrets in written content; Blocks destructive `git` in any form and asks for confirmation on `git -C`/`-c`/`--git-dir`. Also applies inside subagents. | Token-based check, best effort: variable expansion, glob, and external script get past it. May produce false positives (e.g., the `.key` filter of a `jq` matches `*.key`). `onFailure: "block"` is set in `.claude/settings.json`, so a **hook that fails to start, times out, or errors blocks the action**. |
 | `.claudeignore` | root | List of sensitive paths, read by the hook. Reduces context. | Not a security barrier. Duplicates the `Read(...)` in `deny`: when editing one, edit the other. |
 | Sandbox | `/sandbox` (**off today**) | The only mechanism that blocks, at the operating system level, what a subprocess reads, writes, and accesses over the network. | Covers only shell commands; the file tools follow the permission rules. Linux needs `bubblewrap` and `socat`; on Ubuntu 24.04+ AppArmor requires adjustment. |
 | `AGENTS.md`, `CLAUDE.md` | root | Guide judgment. | **Behavioral**: the model may err or ignore them. To really block, use a permission rule or a hook. |
@@ -48,7 +48,7 @@ Usage rules:
 2. **Grep/Glob** without `path` scan the current directory; the hook only sees the `path` provided. Outside a Git repository, `ripgrep` may not apply `.gitignore` (not verified).
 3. **MCP and `WebFetch`** do not go through the file hook. Control them with permission rules (`mcp__server__tool`, `WebFetch(domain:...)`).
 4. **Command prefixes** (`env`, `command`, `time`) are handled by the `git` hook, but other wrappers are not.
-5. Without `onFailure: "block"`, a hook that fails to start, times out, or fails **lets the action through**. Requires Claude Code 2.1.295 or later.
+5. `onFailure: "block"` is already set. Without it, a hook that fails to start, times out, or fails **lets the action through**; keep it when copying the hook to another project. Requires Claude Code 2.1.295 or later.
 
 To close item 1, turn on the sandbox (verify the result in `/sandbox`, Config tab):
 

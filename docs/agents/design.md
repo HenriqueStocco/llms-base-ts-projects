@@ -87,7 +87,6 @@ users/
 ├── service.ts
 ├── repository.ts
 ├── schema.ts
-├── types.ts
 └── tests/
     ├── service.test.ts
     ├── repository.test.ts
@@ -100,8 +99,7 @@ Avoid by default:
 users/
 ├── users.service.ts
 ├── users.repository.ts
-├── users.schema.ts
-└── users.types.ts
+└── users.schema.ts
 ```
 
 The tree above illustrates naming, not a mandatory set of files (8.4).
@@ -181,6 +179,6 @@ Automatic formatters do not enforce all of these spacing rules between declarati
 - Update or remove comments that the change made incorrect.
 - Do not leave commented-out code or pending-work markers without context.
 - Document public APIs, contracts, and relevant behaviors when necessary. Do not create extensive documentation for trivial functions.
-- Record significant architectural decisions in an ADR when the context justifies it and the project adopts the practice.
+- Record significant architectural decisions in the change's OpenSpec design artifact (2.1) or, when the project already keeps ADRs, in an ADR. Do not start a second format.
 - Do not create documentation that duplicates the code or the core instructions.
 

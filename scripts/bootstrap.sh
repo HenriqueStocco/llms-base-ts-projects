@@ -16,7 +16,7 @@
 # overwritten or deleted. Requires git.
 set -euo pipefail
 
-DEFAULT_REPO="https://github.com/HenriqueStocco/my-claude-utils.git"
+DEFAULT_REPO="https://github.com/HenriqueStocco/llms-base-ts-projects.git"
 
 REPO="$DEFAULT_REPO"
 REF=""

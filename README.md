@@ -4,15 +4,15 @@ Guidance base for AI coding agents (Claude Code first). It is **not a software p
 
 ## What is in it
 
-| Path | Purpose |
-| --- | --- |
-| `AGENTS.md` | Core engineering contract, loaded in every session. Rules only, no examples. |
-| `CLAUDE.md` | Claude Code entry point: imports `AGENTS.md` and adds the Claude-specific rules. |
-| `docs/agents/` | Detail with examples and procedures, read on demand when a task touches the topic. |
-| `.claude/` | Enforcement layer: `settings.json` (permissions) and `hooks/` (a `PreToolUse` guard that applies `.claudeignore` and blocks risky commands). |
-| `.claudeignore` | Sensitive paths the agent must not read. Not a security barrier. |
-| `templates/` | Optional project tooling: Git hooks, Biome and Knip configs, Dependabot, CI workflow, `.gitignore`. |
-| `scripts/` | `bootstrap.sh` clones the kit and installs it in one step (also usable through `curl`); `install-project.sh` copies the kit into a project; `test-kit.sh` tests both and the hook templates. |
+| Path            | Purpose                                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`     | Core engineering contract, loaded in every session. Rules only, no examples.                                                                                                                 |
+| `CLAUDE.md`     | Claude Code entry point: imports `AGENTS.md` and adds the Claude-specific rules.                                                                                                             |
+| `docs/agents/`  | Detail with examples and procedures, read on demand when a task touches the topic.                                                                                                           |
+| `.claude/`      | Enforcement layer: `settings.json` (permissions) and `hooks/` (a `PreToolUse` guard that applies `.claudeignore` and blocks risky commands).                                                 |
+| `.claudeignore` | Sensitive paths the agent must not read. Not a security barrier.                                                                                                                             |
+| `templates/`    | Optional project tooling: Git hooks, Biome and Knip configs, Dependabot, CI workflow, `.gitignore`.                                                                                          |
+| `scripts/`      | `bootstrap.sh` clones the kit and installs it in one step (also usable through `curl`); `install-project.sh` copies the kit into a project; `test-kit.sh` tests both and the hook templates. |
 
 ## How to use it
 
@@ -22,11 +22,11 @@ Guidance base for AI coding agents (Claude Code first). It is **not a software p
 
 ```bash
 # New project (a new project has no package.json, so pass --runtime with --tooling).
-curl -fsSL https://raw.githubusercontent.com/HenriqueStocco/my-claude-utils/main/scripts/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/HenriqueStocco/llms-base-ts-projects/main/scripts/bootstrap.sh \
   | bash -s -- --tooling --runtime bun my-app
 
 # Same with wget, previewing only.
-wget -qO- https://raw.githubusercontent.com/HenriqueStocco/my-claude-utils/main/scripts/bootstrap.sh \
+wget -qO- https://raw.githubusercontent.com/HenriqueStocco/llms-base-ts-projects/main/scripts/bootstrap.sh \
   | bash -s -- --dry-run --tooling --runtime pnpm my-app
 ```
 

@@ -77,3 +77,11 @@ bash .claude/hooks/test-guard.sh
 ```
 
 Then use `jq empty .claude/settings.json`, `/hooks`, and `/permissions` to check, and remove `proposals/`.
+
+## 6. User level and project level
+
+- The project copy of this kit (`AGENTS.md`, `CLAUDE.md`, `docs/agents/`, `.claudeignore`, `.claude/`) is the source of the rules for that project: it is versioned and valid for collaborators and CI. Install it with `scripts/install-project.sh`, which never overwrites existing files.
+- Instruction files do not override each other, they are concatenated: if a user rule and a project rule conflict, Claude may follow either one. Do not repeat project rules in `~/.claude/CLAUDE.md`; keep it for personal preferences only.
+- Permission lists merge across levels, and a `deny` at user level cannot be released by a project `allow`. Personal defaults that must hold in every project (for example, output style `Concise`, extra `deny` rules) belong in `~/.claude/settings.json`, applied by the user.
+- Precedence of settings, highest first: managed, `--settings`, local, project, user.
+- Verified against the Claude Code documentation on 2026-10-13.

@@ -17,3 +17,7 @@ Detail and role table: `docs/agents/claude-code.md` (read before changing permis
 - The session's model and effort are the user's choice; do not try to change them. If the task calls for another one (e.g., a hard bug the current model did not solve in 2 attempts), suggest it.
 - Delegate to a subagent broad repository reads, test execution, and log analysis, to keep the main context small. Diff review goes to a subagent with a clean context.
 - Subagents inherit the same permissions and prohibitions; a smaller model does not widen what can be done.
+
+## Compact instructions
+
+When compacting, preserve: the task goal and acceptance criteria, decisions taken and why, the list of modified files, pending steps, and the exact commands that verify the work (tests, lint, typecheck). Drop raw tool output and exploration dead ends.

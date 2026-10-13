@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# pre-push hook: runs the project's `verify` script before pushing.
+# The project defines `verify` in package.json (e.g. typecheck + lint + tests);
+# this hook does not invent any other script.
+set -euo pipefail
+
+# Succeeds when package.json has a "verify" entry inside its "scripts" block.
+# Text-based on purpose (no jq); it assumes the usual pretty-printed layout.
+has_verify_script() {
+  local scripts_block
+
+  if [[ ! -f package.json ]]; then
+    return 1
+  fi
+
+  scripts_block="$(sed -n '/"scripts"[[:space:]]*:/,/^[[:space:]]*},\{0,1\}[[:space:]]*$/p' package.json)"
+
+  grep -q '"verify"[[:space:]]*:' <<< "$scripts_block"
+}
+
+# Prints the package manager inferred from the lockfile (nothing if unknown).
+detect_package_manager() {
+  if [[ -f bun.lock || -f bun.lockb ]]; then
+    echo "bun"
+  elif [[ -f package-lock.json ]]; then
+    echo "npm"
+  elif [[ -f pnpm-lock.yaml ]]; then
+    echo "pnpm"
+  elif [[ -f yarn.lock ]]; then
+    echo "yarn"
+  fi
+}
+
+main() {
+  local root
+  if ! root="$(git rev-parse --show-toplevel)"; then
+    echo "pre-push: not inside a Git work tree." >&2
+    exit 1
+  fi
+
+  cd "$root"
+
+  if ! has_verify_script; then
+    echo "pre-push: no \"verify\" script in package.json, skipped" >&2
+    exit 0
+  fi
+
+  local manager
+  manager="$(detect_package_manager)"
+
+  if [[ -z "$manager" ]]; then
+    echo "pre-push: package.json has a \"verify\" script but no known lockfile" >&2
+    echo "(bun.lock, bun.lockb, package-lock.json, pnpm-lock.yaml, yarn.lock)." >&2
+    echo "Cannot choose a package manager; refusing to push without verification." >&2
+    exit 1
+  fi
+
+  if ! command -v "$manager" > /dev/null 2>&1; then
+    echo "pre-push: '$manager' (from the lockfile) was not found in PATH." >&2
+    exit 1
+  fi
+
+  exec "$manager" run verify
+}
+
+main "$@"

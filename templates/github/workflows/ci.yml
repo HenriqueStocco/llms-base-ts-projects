@@ -1,0 +1,39 @@
+# Private repos on a Free plan get 2,000 Actions minutes per month and have no
+# branch protection, so local hooks are the main guard and CI is the
+# reproducible backup that repeats the same checks.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # setup-bun reads the version from `packageManager` in package.json or
+      # from .bun-version in the project.
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+      - run: bunx biome ci .
+      - run: bun audit --audit-level=high
+
+      # Use the project's scripts; adapt the names to what package.json defines.
+      # - run: bun run typecheck
+      # - run: bun run test
+
+      # Node.js variant: use these steps instead of the setup-bun, install,
+      # biome and audit steps above.
+      # - uses: actions/setup-node@v7
+      #   with:
+      #     node-version-file: package.json # or .nvmrc
+      # - run: npm ci
+      # - run: npx biome ci .
+      # - run: npm audit --audit-level=high

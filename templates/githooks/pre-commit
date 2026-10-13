@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# pre-commit hook: runs Biome on the staged files.
+set -euo pipefail
+
+main() {
+  local root
+  if ! root="$(git rev-parse --show-toplevel)"; then
+    echo "pre-commit: not inside a Git work tree." >&2
+    exit 1
+  fi
+
+  cd "$root"
+
+  if [[ ! -f biome.json && ! -f biome.jsonc ]]; then
+    echo "pre-commit: no Biome config, skipped" >&2
+    exit 0
+  fi
+
+  if [[ ! -x node_modules/.bin/biome ]]; then
+    echo "pre-commit: Biome config found but node_modules/.bin/biome is missing." >&2
+    echo "Install the dependencies with the project's package manager and retry." >&2
+    exit 1
+  fi
+
+  # --staged is for local use (checks only what is about to be committed);
+  # CI runs `biome ci` over the whole project instead.
+  exec node_modules/.bin/biome check \
+    --staged \
+    --files-ignore-unknown=true \
+    --no-errors-on-unmatched
+}
+
+main "$@"

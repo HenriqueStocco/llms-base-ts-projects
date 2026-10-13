@@ -12,9 +12,27 @@ Guidance base for AI coding agents (Claude Code first). It is **not a software p
 | `.claude/` | Enforcement layer: `settings.json` (permissions) and `hooks/` (a `PreToolUse` guard that applies `.claudeignore` and blocks risky commands). |
 | `.claudeignore` | Sensitive paths the agent must not read. Not a security barrier. |
 | `templates/` | Optional project tooling: Git hooks, Biome and Knip configs, Dependabot, CI workflow, `.gitignore`. |
-| `scripts/` | `install-project.sh` copies the kit into a project; `test-kit.sh` tests the installer and the hook templates. |
+| `scripts/` | `bootstrap.sh` clones the kit and installs it in one step (also usable through `curl`); `install-project.sh` copies the kit into a project; `test-kit.sh` tests both and the hook templates. |
 
 ## How to use it
+
+### Without cloning (`curl` or `wget`)
+
+`scripts/bootstrap.sh` shallow-clones the kit into a temporary directory, drops its `.git`, runs the installer below against the target, and removes the temporary directory. It needs `git`. The target defaults to the current directory and is created if missing; it takes the same options as the installer, plus `--repo <git-url>` and `--ref <branch-or-tag>`.
+
+```bash
+# New project (a new project has no package.json, so pass --runtime with --tooling).
+curl -fsSL https://raw.githubusercontent.com/HenriqueStocco/my-claude-utils/main/scripts/bootstrap.sh \
+  | bash -s -- --tooling --runtime bun my-app
+
+# Same with wget, previewing only.
+wget -qO- https://raw.githubusercontent.com/HenriqueStocco/my-claude-utils/main/scripts/bootstrap.sh \
+  | bash -s -- --dry-run --tooling --runtime pnpm my-app
+```
+
+Piping a download into `bash` runs it unread. To read it first: `curl -fsSLO <url>`, read `bootstrap.sh`, then `bash bootstrap.sh ...`. When files already exist and differ, the temporary copy is kept so the printed `diff -u` commands still work; its path is printed.
+
+### From a local clone
 
 ```bash
 # 1. Preview. Writes nothing.
@@ -33,7 +51,7 @@ scripts/setup-hooks.sh
 - The installer does not run `git` in the target and does not install dependencies.
 - The kit's hook (`.claude/hooks/guard-paths.sh`) needs `jq`.
 - Scripts target Linux (Ubuntu and Arch) and use only Bash and tools both ship by default.
-- Run `scripts/test-kit.sh` to check the installer and the hook templates (it works in a temporary directory).
+- Run `scripts/test-kit.sh` to check the bootstrap, the installer, and the hook templates (it works in a temporary directory).
 
 ## Changing the protections
 

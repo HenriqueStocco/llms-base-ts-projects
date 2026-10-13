@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Self-contained tests for scripts/install-project.sh and the templates/ hooks.
+# Self-contained tests for scripts/install-project.sh, scripts/bootstrap.sh and
+# the templates/ hooks.
 # Everything runs inside a temporary directory; the real repository is only read.
 #
 # Usage: scripts/test-kit.sh
@@ -8,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 INSTALLER="$SOURCE_ROOT/scripts/install-project.sh"
+BOOTSTRAP="$SOURCE_ROOT/scripts/bootstrap.sh"
 HOOKS="$SOURCE_ROOT/templates/githooks"
 SETUP_HOOKS="$SOURCE_ROOT/templates/scripts/setup-hooks.sh"
 
@@ -128,6 +130,160 @@ source_of() {
 
 init_repo() {
   git -c init.defaultBranch=main init -q "$1"
+}
+
+# Builds a throwaway Git repository from the working tree (without .git and
+# .serena) and prints its file:// URL, so bootstrap.sh can clone it offline.
+make_kit_fixture() {
+  local fixture="$TMP_ROOT/kit-fixture"
+
+  mkdir -p "$fixture"
+  tar -C "$SOURCE_ROOT" --exclude=.git --exclude=.serena -cf - . | tar -C "$fixture" -xf -
+  init_repo "$fixture"
+  git -C "$fixture" add -A
+  git -C "$fixture" -c user.name=test -c user.email=test@example.invalid commit -q -m "fixture"
+  git -C "$fixture" tag v1
+
+  echo "file://$fixture"
+}
+
+# expect_tmp_clean <dir> <description>: bootstrap removed its temporary files.
+expect_tmp_clean() {
+  if [[ -z "$(ls -A "$1")" ]]; then
+    pass "$2"
+  else
+    fail "$2" "left behind: $(ls -A "$1" | tr '\n' ' ')"
+  fi
+}
+
+test_bootstrap() {
+  echo "-- bootstrap"
+  local repo tmp target path kit
+
+  repo="$(make_kit_fixture)"
+  tmp="$(new_dir bootstrap-tmp)"
+
+  target="$TMP_ROOT/bootstrap-dry"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --dry-run "$target"
+  expect_rc 0 "dry run into a missing directory succeeds"
+  expect_out 'WOULD-COPY +AGENTS\.md' "dry run lists kit files"
+  if [[ ! -e "$target" ]]; then
+    pass "dry run does not create the target"
+  else
+    fail "dry run does not create the target"
+  fi
+  expect_tmp_clean "$tmp" "dry run removes its temporary files"
+
+  target="$TMP_ROOT/bootstrap-new"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" "$target"
+  expect_rc 0 "installs into a missing directory"
+  while IFS= read -r path; do
+    if [[ -f "$target/$path" ]]; then
+      pass "installed $path"
+    else
+      fail "installed $path"
+    fi
+  done < <(expected_core_files)
+  if [[ ! -e "$target/.git" ]]; then
+    pass "no .git in the target"
+  else
+    fail "no .git in the target"
+  fi
+  expect_no_out 'Kept the kit copy' "keeps no temporary copy when nothing differs"
+  expect_tmp_clean "$tmp" "install removes its temporary files"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" "$target"
+  expect_rc 0 "second run succeeds"
+  expect_out 'Summary: 0 new, [0-9]+ same, 0 different' "second run changes nothing"
+
+  target="$TMP_ROOT/bootstrap-tooling"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --tooling --runtime pnpm "$target"
+  expect_rc 0 "installs tooling with --runtime in a new project"
+  while IFS= read -r path; do
+    if [[ -f "$target/$path" ]]; then
+      pass "installed $path"
+    else
+      fail "installed $path"
+    fi
+  done < <(expected_tooling_files)
+  if cmp -s "$SOURCE_ROOT/templates/github/workflows/ci-pnpm.yml" "$target/.github/workflows/ci.yml"; then
+    pass "picked the pnpm CI workflow"
+  else
+    fail "picked the pnpm CI workflow"
+  fi
+
+  target="$TMP_ROOT/bootstrap-no-runtime"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --tooling "$target"
+  expect_rc 2 "--tooling in a new project without --runtime is refused"
+  expect_out 'cannot detect the runtime' "explains the missing runtime"
+  if [[ ! -e "$target" ]]; then
+    pass "refused install leaves no empty directory"
+  else
+    fail "refused install leaves no empty directory"
+  fi
+  expect_tmp_clean "$tmp" "refused install removes its temporary files"
+
+  target="$(new_dir bootstrap-cwd)"
+  run env TMPDIR="$tmp" bash -c 'cd "$1" && bash "$2" --repo "$3"' _ "$target" "$BOOTSTRAP" "$repo"
+  expect_rc 0 "target defaults to the current directory"
+  if [[ -f "$target/AGENTS.md" ]]; then
+    pass "installed into the current directory"
+  else
+    fail "installed into the current directory"
+  fi
+
+  target="$(new_dir bootstrap-existing)"
+  echo "mine" > "$target/AGENTS.md"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" "$target"
+  expect_rc 0 "install with a differing file succeeds"
+  expect_out '^DIFFERENT +AGENTS\.md' "reports the differing file"
+  if [[ "$(cat "$target/AGENTS.md")" == "mine" ]]; then
+    pass "differing file is kept as is"
+  else
+    fail "differing file is kept as is"
+  fi
+  kit="$(sed -n 's/^Kept the kit copy.*: //p' <<< "$OUT")"
+  if [[ -n "$kit" && -f "$kit/AGENTS.md" ]]; then
+    pass "keeps the kit copy for the diff commands"
+  else
+    fail "keeps the kit copy for the diff commands" "output: $OUT"
+  fi
+  if [[ -n "$kit" ]]; then
+    rm -rf "$(dirname "$kit")"
+  fi
+  expect_tmp_clean "$tmp" "no temporary files left after removing the kept copy"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --ref v1 --dry-run "$TMP_ROOT/bootstrap-ref"
+  expect_rc 0 "--ref accepts a tag"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --ref no-such-ref --dry-run "$TMP_ROOT/bootstrap-ref"
+  expect_rc 1 "unknown --ref fails"
+  expect_out 'could not clone' "explains the clone failure"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "file://$TMP_ROOT/no-such-repo" --dry-run "$TMP_ROOT/bootstrap-ref"
+  expect_rc 1 "unreachable repository fails"
+  expect_tmp_clean "$tmp" "failed clone removes its temporary files"
+
+  path="$(new_dir not-a-kit)"
+  init_repo "$path"
+  echo "x" > "$path/file.txt"
+  git -C "$path" add file.txt
+  git -C "$path" -c user.name=test -c user.email=test@example.invalid commit -q -m "x"
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "file://$path" --dry-run "$TMP_ROOT/bootstrap-ref"
+  expect_rc 1 "a repository that is not the kit is refused"
+  expect_out 'not the agent kit' "explains the missing installer"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" --bogus "$TMP_ROOT/bootstrap-ref"
+  expect_rc 2 "unknown option is refused by the installer"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" one two
+  expect_rc 2 "two targets are refused"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --ref
+  expect_rc 2 "--ref without a value is refused"
+
+  run env TMPDIR="$tmp" bash "$BOOTSTRAP" --repo "$repo" "$SOURCE_ROOT/AGENTS.md"
+  expect_rc 2 "a target that is a file is refused"
 }
 
 test_dry_run() {
@@ -735,6 +891,7 @@ main() {
   test_pre_commit
   test_pre_push
   test_setup_hooks
+  test_bootstrap
   test_runtime_detection
   test_templates
 
